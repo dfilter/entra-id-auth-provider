@@ -1,24 +1,15 @@
-type Success<T> = {
-	data: T;
-	error: null;
-};
-
-type Failure<E> = {
-	data: null;
-	error: E;
-};
-
-export type Result<T, E = Error> = Success<T> | Failure<E>;
+import type { ErrorProps, Result } from "./types";
 
 export function tryCatchSync<TArgs extends unknown[], T, E = Error>(
 	fn: (...args: TArgs) => T,
+	onError?: (error: E) => void | Promise<void>,
 ): (...args: TArgs) => Result<T, E> {
 	return (...args: TArgs): Result<T, E> => {
 		try {
 			const data = fn(...args);
 			return { data, error: null };
 		} catch (error) {
-			console.error(error);
+			onError?.(error as E);
 			return { data: null, error: error as E };
 		}
 	};
@@ -26,25 +17,54 @@ export function tryCatchSync<TArgs extends unknown[], T, E = Error>(
 
 export function tryCatch<TArgs extends unknown[], T, E = Error>(
 	fn: (...args: TArgs) => Promise<T>,
+	onError?: (error: E) => void | Promise<void>,
 ): (...args: TArgs) => Promise<Result<T, E>> {
 	return async (...args: TArgs): Promise<Result<T, E>> => {
 		try {
 			const data = await fn(...args);
 			return { data, error: null };
 		} catch (error) {
-			console.error(error);
+			onError?.(error as E);
 			return { data: null, error: error as E };
 		}
 	};
 }
 
-export class FetchError extends Error {
-	constructor(response: Response, name: string, responseText: string) {
-		super();
-		const cause = `${response.statusText} - ${responseText}`;
+export class AcquireTokenOnBehalfOfError extends Error implements ErrorProps {
+	name = "AcquireTokenOnBehalfOfError";
+	message: string;
+	body: string;
+	status: number;
+	statusText: string;
+	props: ErrorProps["props"];
 
-		this.message = `HTTP Error ${response.status}: ${cause}`;
-		this.cause = `${response.statusText} - ${responseText}`;
-		this.name = `${name} FetchError`;
+	constructor({ message, body, status, statusText, props }: ErrorProps) {
+		super(message);
+		this.message = message;
+		this.body = body;
+		this.status = status;
+		this.statusText = statusText;
+		this.props = props;
+	}
+}
+
+export class AcquireTokenByClientCredentialError
+	extends Error
+	implements ErrorProps
+{
+	name = "AcquireTokenByClientCredentialError";
+	message: string;
+	body: string;
+	status: number;
+	statusText: string;
+	props: ErrorProps["props"];
+
+	constructor({ message, body, status, statusText, props }: ErrorProps) {
+		super(message);
+		this.message = message;
+		this.body = body;
+		this.status = status;
+		this.statusText = statusText;
+		this.props = props;
 	}
 }

@@ -7,36 +7,75 @@ import {
 	MicrosoftEntraId,
 	type OAuth2Tokens,
 } from "arctic";
-import { FetchError, tryCatch, tryCatchSync } from "./error-handling";
+import {
+	AcquireTokenByClientCredentialError,
+	AcquireTokenOnBehalfOfError,
+	tryCatch,
+	tryCatchSync,
+} from "./error-handling";
 import { defaultTokenSchema, idTokenSchema, oboTokenSchema } from "./lib/zod";
-import type { Session, User } from "./types";
+import type {
+	IAuthProviderProps,
+	OboApplicationConfig,
+	Session,
+	User,
+} from "./types";
 
-type AuthProviderConfig = {
-	tenantId: string;
-	clientId: string;
-	clientSecret: string;
-	redirect: string;
-};
+export class AuthProvider<Config extends OboApplicationConfig> {
+	onError?: <T extends Error>(error: T) => void | Promise<void>;
+	readonly timeout?: number;
 
-export class AuthProvider {
-	private readonly entraId: MicrosoftEntraId;
-	private readonly clientId: string;
 	private readonly clientSecret: string;
-	private readonly microsoftOAuthUrl: string;
+	private textEncoder = new TextEncoder();
 
-	constructor(config: AuthProviderConfig) {
-		const { clientId, clientSecret, tenantId, redirect } = config;
+	readonly clientId: string;
+	readonly entraId: MicrosoftEntraId;
+	readonly microsoftOAuthUrl: string;
+	readonly oboApplications: Config;
+	readonly redirectUri: string;
+	readonly scopes: string[];
+	readonly tenantId: string;
 
+	constructor({
+		clientId,
+		clientSecret,
+		tenantId,
+		redirectUri,
+		onError,
+		oboApplications,
+		scopes,
+		timeout,
+	}: IAuthProviderProps<Config>) {
 		this.clientId = clientId;
 		this.clientSecret = clientSecret;
 		this.microsoftOAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+		this.onError = onError;
+		this.tenantId = tenantId;
+		this.redirectUri = redirectUri;
+		this.scopes = scopes;
+		this.oboApplications = oboApplications;
+		this.timeout = timeout;
 
 		this.entraId = new MicrosoftEntraId(
 			tenantId,
 			clientId,
 			clientSecret,
-			redirect,
+			redirectUri,
 		);
+	}
+
+	private getTimeout() {
+		if (!this.timeout) return;
+
+		const controller = new AbortController();
+		const abortTimeout = setTimeout(() => controller.abort(), this.timeout);
+		return {
+			signal: controller.signal,
+			abortTimeout,
+			clearAbortTimeout: () => {
+				clearTimeout(abortTimeout);
+			},
+		};
 	}
 
 	refreshAccessToken = tryCatch(
@@ -48,6 +87,7 @@ export class AuthProvider {
 
 			return this.formatSessionTokenAndUser(tokens, state);
 		},
+		this.onError,
 	);
 
 	validateAuthorizationCode = tryCatch(
@@ -80,19 +120,24 @@ export class AuthProvider {
 
 			return { token, session, user };
 		},
+		this.onError,
 	);
 
-	createAuthorizationURL(scope: string[]) {
+	createAuthorizationURL() {
 		const state = generateState();
 		const codeVerifier = generateCodeVerifier();
 
-		const url = this.entraId.createAuthorizationURL(state, codeVerifier, scope);
+		const url = this.entraId.createAuthorizationURL(
+			state,
+			codeVerifier,
+			this.scopes,
+		);
 		url.searchParams.set("nonce", codeVerifier);
 
 		return { url, state, codeVerifier };
 	}
 
-	userFromIdToken = tryCatchSync((idToken: string) => {
+	private userFromIdToken = tryCatchSync((idToken: string) => {
 		const decodedIdToken = idTokenSchema.parse(decodeIdToken(idToken));
 
 		const user: User = {
@@ -107,9 +152,9 @@ export class AuthProvider {
 		};
 
 		return user;
-	});
+	}, this.onError);
 
-	formatSessionTokenAndUser(tokens: OAuth2Tokens, state?: string) {
+	private formatSessionTokenAndUser(tokens: OAuth2Tokens, state?: string) {
 		const idToken = tokens.idToken();
 
 		const { data: user } = this.userFromIdToken(idToken);
@@ -140,36 +185,43 @@ export class AuthProvider {
 	}
 
 	generateSessionId(token: string) {
-		return encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+		return encodeHexLowerCase(sha256(this.textEncoder.encode(token)));
 	}
 
 	tokenToSessionId(token: string) {
-		return encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+		return encodeHexLowerCase(sha256(this.textEncoder.encode(token)));
 	}
 
 	acquireTokenOnBehalfOf = tryCatch(
-		async (accessToken: string, scopes: string[]) => {
+		async (applicationId: keyof Config, accessToken: string) => {
 			const body = new URLSearchParams({
 				grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
 				client_id: this.clientId,
 				client_secret: this.clientSecret,
 				assertion: accessToken,
-				scope: scopes.join(" "),
+				scope: this.oboApplications[applicationId].scopes.join(" "),
 				requested_token_use: "on_behalf_of",
 			});
 
+			const timeout = this.getTimeout();
 			const response = await fetch(this.microsoftOAuthUrl, {
 				method: "POST",
 				headers: { "Content-Type": "application/x-www-form-urlencoded" },
 				body,
+				signal: timeout?.signal,
 			});
+			timeout?.clearAbortTimeout();
+
 			if (!response.ok) {
-				const error = new FetchError(
-					response,
-					"On Behalf Of OAuth Flow",
-					await response.text(),
-				);
-				throw error;
+				throw new AcquireTokenOnBehalfOfError({
+					message: "Failed to acquire token on behalf of user",
+					body: body.toString(),
+					status: response.status,
+					statusText: response.statusText,
+					props: {
+						applicationId,
+					},
+				});
 			}
 
 			const data = oboTokenSchema.parse(await response.json());
@@ -187,31 +239,40 @@ export class AuthProvider {
 
 			return { session, token };
 		},
+		this.onError,
 	);
 
-	acquireTokenByClientCredential = tryCatch(async (scopes: string[]) => {
-		const body = new URLSearchParams({
-			client_id: this.clientId,
-			client_secret: this.clientSecret,
-			grant_type: "client_credentials",
-			scope: scopes.join(" "),
-		});
+	acquireTokenByClientCredential = tryCatch(
+		async (applicationId: keyof Config) => {
+			const body = new URLSearchParams({
+				client_id: this.clientId,
+				client_secret: this.clientSecret,
+				grant_type: "client_credentials",
+				scope: this.oboApplications[applicationId].scopes.join(" "),
+			});
 
-		const response = await fetch(this.microsoftOAuthUrl, {
-			method: "POST",
-			headers: { "Content-Type": "application/x-www-form-urlencoded" },
-			body,
-		});
+			const timeout = this.getTimeout();
+			const response = await fetch(this.microsoftOAuthUrl, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body,
+			});
+			timeout?.clearAbortTimeout();
 
-		if (!response.ok) {
-			const error = new FetchError(
-				response,
-				"Acquiring Token By Client Credentials Failed",
-				await response.text(),
-			);
-			throw error;
-		}
+			if (!response.ok) {
+				throw new AcquireTokenByClientCredentialError({
+					message: "Failed to acquire token by client credential",
+					body: body.toString(),
+					status: response.status,
+					statusText: response.statusText,
+					props: {
+						applicationId,
+					},
+				});
+			}
 
-		return defaultTokenSchema.parse(await response.json());
-	});
+			return defaultTokenSchema.parse(await response.json());
+		},
+		this.onError,
+	);
 }

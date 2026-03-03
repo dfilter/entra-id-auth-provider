@@ -19,3 +19,40 @@ export type User = {
 	dateCreated: Date;
 	dateUpdated: Date | null;
 };
+
+export type OboApplicationConfig = {
+	[clientId: string]: {
+		scopes: string[];
+	};
+};
+
+export interface IAuthProviderProps<Config extends OboApplicationConfig> {
+	readonly clientId: string;
+	readonly tenantId: string;
+	readonly clientSecret: string;
+	readonly redirectUri: string;
+	readonly scopes: string[];
+	readonly timeout?: number;
+	onError?: <T extends Error>(error: T) => void | Promise<void>;
+	oboApplications: Config;
+}
+
+type Success<T> = {
+	data: T;
+	error: null;
+};
+
+type Failure<E> = {
+	data: null;
+	error: E;
+};
+
+export type Result<T, E = Error> = Success<T> | Failure<E>;
+
+export interface ErrorProps {
+	message: string;
+	body: string;
+	status: number;
+	statusText: string;
+	props: Record<string, any>;
+}
