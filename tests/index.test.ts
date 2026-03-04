@@ -1,10 +1,5 @@
 import type { OAuth2Tokens } from "arctic";
-import {
-	decodeIdToken,
-	generateCodeVerifier,
-	generateState,
-	MicrosoftEntraId,
-} from "arctic";
+import { decodeIdToken, generateCodeVerifier, generateState } from "arctic";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	AcquireTokenByClientCredentialError,
@@ -260,10 +255,7 @@ describe("AuthProvider", () => {
 				ver: "2.0",
 			});
 
-			const result = await provider.refreshAccessToken("refresh-token", [
-				"openid",
-				"email",
-			]);
+			const result = await provider.refreshAccessToken("refresh-token");
 
 			expect(result.error).toBeNull();
 			expect(result.data).toHaveProperty("session");
@@ -278,10 +270,7 @@ describe("AuthProvider", () => {
 				new Error("Invalid refresh token"),
 			);
 
-			const result = await provider.refreshAccessToken(
-				"invalid-refresh-token",
-				["openid"],
-			);
+			const result = await provider.refreshAccessToken("invalid-refresh-token");
 
 			expect(result.error).toBeDefined();
 		});

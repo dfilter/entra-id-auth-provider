@@ -1,20 +1,5 @@
 import type { ErrorProps, Result } from "./types";
 
-export function tryCatchSync<TArgs extends unknown[], T, E = Error>(
-	fn: (...args: TArgs) => T,
-	onError?: (error: E) => void | Promise<void>,
-): (...args: TArgs) => Result<T, E> {
-	return (...args: TArgs): Result<T, E> => {
-		try {
-			const data = fn(...args);
-			return { data, error: null };
-		} catch (error) {
-			onError?.(error as E);
-			return { data: null, error: error as E };
-		}
-	};
-}
-
 export function tryCatch<TArgs extends unknown[], T, E = Error>(
 	fn: (...args: TArgs) => Promise<T>,
 	onError?: (error: E) => void | Promise<void>,

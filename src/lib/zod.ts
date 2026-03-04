@@ -5,6 +5,7 @@ export const defaultTokenSchema = z.object({
 	expires_in: z.number(),
 	access_token: z.string(),
 });
+export type DefaultTokenResponse = z.infer<typeof defaultTokenSchema>;
 
 export const oboTokenSchema = defaultTokenSchema.extend({
 	scope: z.string(),

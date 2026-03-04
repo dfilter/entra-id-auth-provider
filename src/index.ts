@@ -11,7 +11,6 @@ import {
 	AcquireTokenByClientCredentialError,
 	AcquireTokenOnBehalfOfError,
 	tryCatch,
-	tryCatchSync,
 } from "./error-handling";
 import { defaultTokenSchema, idTokenSchema, oboTokenSchema } from "./lib/zod";
 import type {
@@ -79,7 +78,14 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 	}
 
 	refreshAccessToken = tryCatch(
-		async (refreshToken: string, scopes: string[], state?: string) => {
+		async (
+			refreshToken: string,
+			applicationId?: keyof Config,
+			state?: string,
+		) => {
+			const scopes = applicationId
+				? this.oboApplications[applicationId].scopes
+				: this.scopes;
 			const tokens = await this.entraId.refreshAccessToken(
 				refreshToken,
 				scopes,
@@ -97,14 +103,7 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 				codeVerifier,
 			);
 			const idToken = tokens.idToken();
-
-			const { data: user } = this.userFromIdToken(idToken);
-			if (!user) {
-				throw new Error("validateAuthorizationCode", {
-					cause: JSON.stringify({ code, codeVerifier, state }),
-				});
-			}
-
+			const user = this.userFromIdToken(idToken);
 			const token = this.generateSessionToken();
 			const sessionId = this.generateSessionId(token);
 			const session = {
@@ -137,7 +136,7 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		return { url, state, codeVerifier };
 	}
 
-	private userFromIdToken = tryCatchSync((idToken: string) => {
+	private userFromIdToken(idToken: string) {
 		const decodedIdToken = idTokenSchema.parse(decodeIdToken(idToken));
 
 		const user: User = {
@@ -152,22 +151,17 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		};
 
 		return user;
-	}, this.onError);
+	}
 
 	private formatSessionTokenAndUser(tokens: OAuth2Tokens, state?: string) {
 		const idToken = tokens.idToken();
-
-		const { data: user } = this.userFromIdToken(idToken);
-		if (!user) return null;
-
+		const user = this.userFromIdToken(idToken);
 		const token = this.generateSessionToken();
 		const sessionId = this.generateSessionId(token);
-
 		const session: Session = {
 			id: sessionId,
 			accessToken: tokens.accessToken(),
 			expiresOn: tokens.accessTokenExpiresAt(),
-			userId: user.id,
 			refreshToken: tokens.refreshToken(),
 			scopes: tokens.scopes().join(" "),
 			tokenType: tokens.tokenType(),
@@ -228,13 +222,14 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 
 			const token = this.generateSessionToken();
 			const sessionId = this.generateSessionId(token);
-			const session = {
+			const session: Session = {
 				id: sessionId,
 				accessToken: data.access_token,
 				tokenType: data.token_type,
 				expiresOn: new Date(Date.now() + data.expires_in * 1000),
 				scopes: data.scope,
-				refreshToken: data.refresh_token,
+				refreshToken: data.refresh_token ?? null,
+				state: null,
 			};
 
 			return { session, token };
