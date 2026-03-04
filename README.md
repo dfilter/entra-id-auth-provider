@@ -5,7 +5,7 @@ OAuth implementation that includes:
 - client credential token acquisition
 - on-behalf-of (OBO) token exchange
 - token request timeout config
-- type safe OBO token exchange - applications will auto complete when calling 
+- type safe OBO token exchange - applications will auto complete when calling methods
 
 ### Example:
 
