@@ -243,7 +243,7 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 				client_id: this.clientId,
 				client_secret: this.clientSecret,
 				grant_type: "client_credentials",
-				scope: this.oboApplications[applicationId].scopes.join(" "),
+				scope: this.oboApplications[applicationId].defaultScope,
 			});
 
 			const timeout = this.getTimeout();
@@ -271,3 +271,7 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		this.onError,
 	);
 }
+
+export * from "./error-handling";
+export * from "./lib/zod";
+export * from "./types";

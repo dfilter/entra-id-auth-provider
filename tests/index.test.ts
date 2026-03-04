@@ -34,6 +34,7 @@ const createTestProvider = (
 		scopes: ["openid", "profile", "email"],
 		oboApplications: {
 			"app-1": {
+				defaultScope: "https://graph.microsoft.com/.default",
 				scopes: ["https://graph.microsoft.com/.default"],
 			},
 		},

@@ -21,6 +21,7 @@ export type User = {
 
 export type OboApplicationConfig = {
 	[clientId: string]: {
+		defaultScope: string;
 		scopes: string[];
 	};
 };
