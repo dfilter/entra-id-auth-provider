@@ -39,28 +39,52 @@ const authProvider = new AuthProvider({
 });
 
 // Creating the url for start of OAuth2.0 flow:
-const { codeVerifier, state, url } = await createAuthProvider.createAuthorizationURL();
+const { 
+    codeVerifier, // AKA "nonce"
+    state, 
+    url,
+} = await createAuthProvider.createAuthorizationURL();
 
 // After auth redirect your route handler will use this to get the users token, session and user details:
-const { data: sessionData, error: codeVerificationError } = await createAuthProvider.validateAuthorizationCode(
+const { 
+    data: sessionData, 
+    error: codeVerificationError,
+} = await createAuthProvider.validateAuthorizationCode(
     "code-provided-from-oauth-flow", 
-    codeVerifier, 
+    codeVerifier, // AKA "nonce"
     state
 );
 
 // Provide the refresh token and the application if refreshing for an obo token:
-const { data: oboRefreshedSession, error: oboRefreshError } = await authProvider.refreshAccessToken("some-obo-app-refresh-token", "api1");
+const { 
+    data: oboRefreshedSession, 
+    error: oboRefreshError,
+} = await authProvider.refreshAccessToken(
+    "some-obo-app-refresh-token",
+    "api1"
+);
 
-// Leave application id black to refresh the application's token:
-const { data: refreshSession, error: refreshError } = await authProvider.refreshAccessToken("some-app-refresh-token");
+// Leave application id blank to refresh the application's token:
+const { 
+    data: refreshSession, 
+    error: refreshError 
+} = await authProvider.refreshAccessToken(
+    "some-app-refresh-token"
+);
 
 // Use this when the application itself needs to get a token for another api:
-const { data: clientToken, error: clientTokenError } = await createAuthProvider.acquireTokenByClientCredential(
+const { 
+    data: clientToken,
+    error: clientTokenError,
+} = await createAuthProvider.acquireTokenByClientCredential(
     "api1", // Type safe and based off of oboApplications configured via the provider.
 );
 
 // Use this when you want to exchange a user's token for that of another api:
-const { data: userToken, error: userTokenError } = await createAuthProvider.acquireTokenOnBehalfOf(
+const { 
+    data: userToken, 
+    error: userTokenError,
+} = await createAuthProvider.acquireTokenOnBehalfOf(
     "api1", // Type safe and based off of oboApplications configured via the provider.
     "some-access-token" // Users access token from main application.
 );
