@@ -38,6 +38,7 @@ const authProvider = new AuthProvider({
 	redirectUri: process.env.ENTRA_REDIRECT_URI,
 	oboApplications: {
 		api1: {
+            defaultScope: "api://70e35c7f-7829-4a2a-a230-f0391cf0c097/.default"
 			scopes: [
                 "api://70e35c7f-7829-4a2a-a230-f0391cf0c097/access-as",
                 "offline_access",
@@ -112,7 +113,7 @@ const {
 | `tenantId` | `string` | Yes | Your Azure AD tenant ID |
 | `scopes` | `string[]` | Yes | OAuth scopes to request |
 | `redirectUri` | `string` | Yes | URI to redirect after authentication |
-| `oboApplications` | `Record<string, { scopes: string[] }>` | No | OBO app configurations |
+| `oboApplications` | `Record<string, { scopes: string[]; defaultScope: string; }>` | No | OBO app configurations, defaultScope used in acquireTokenByClientCredential |
 | `onError` | `(error: Error) => void` | No | Error callback hook |
 | `timeout` | `number` | No | Request timeout in milliseconds |
 

@@ -20,19 +20,33 @@ import type {
 	User,
 } from "./types";
 
+/**
+ * AuthProvider is a class that provides methods for handling authentication with Microsoft Entra ID.
+ * It supports validating authorization codes, refreshing access tokens, acquiring tokens on behalf
+ * of users, and acquiring tokens using client credentials. The class is designed to be flexible
+ * and can be configured with different applications and scopes.
+ */
 export class AuthProvider<Config extends OboApplicationConfig> {
+	/** A function to handle errors that occur during authentication. */
 	onError?: <T extends Error>(error: T) => void | Promise<void>;
+	/** The timeout for the authentication requests. */
 	readonly timeout?: number;
 
 	private readonly clientSecret: string;
 	private textEncoder = new TextEncoder();
+	private readonly entraId: MicrosoftEntraId;
 
+	/** The client ID for the application. */
 	readonly clientId: string;
-	readonly entraId: MicrosoftEntraId;
+	/** The URL for the Microsoft OAuth endpoint. */
 	readonly microsoftOAuthUrl: string;
+	/** The applications that can be used to acquire tokens on behalf of users. */
 	readonly oboApplications: Config;
+	/** The redirect URI for the application. */
 	readonly redirectUri: string;
+	/** The scopes for the application. */
 	readonly scopes: string[];
+	/** The tenant ID for the Microsoft Entra ID. */
 	readonly tenantId: string;
 
 	constructor({
@@ -77,6 +91,13 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		};
 	}
 
+	/**
+	 * Refreshes an access token using a refresh token. Optionally accepts an application ID to determine the scopes for the new token.
+	 * @param refreshToken The refresh token to use for acquiring a new access token.
+	 * @param applicationId The client ID of the application to determine scopes for the new token (optional).
+	 * @param state The state value to associate with the session (optional).
+	 * @returns An object containing the new session information, user details, and a new session token.
+	 */
 	refreshAccessToken = tryCatch(
 		async (
 			refreshToken: string,
@@ -96,6 +117,14 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		this.onError,
 	);
 
+	/**
+	 * Validates an authorization code received from the Microsoft Entra ID authorization endpoint.
+	 * Exchanges the code for tokens and extracts user information to create a session.
+	 * @param code The authorization code to validate.
+	 * @param codeVerifier The PKCE code verifier used in the initial authorization request.
+	 * @param state The state value to associate with the session (optional).
+	 * @returns An object containing the session token, session information, and user details.
+	 */
 	validateAuthorizationCode = tryCatch(
 		async (code: string, codeVerifier: string, state: string) => {
 			const tokens = await this.entraId.validateAuthorizationCode(
@@ -122,6 +151,11 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		this.onError,
 	);
 
+	/**
+	 * Creates an authorization URL for the Microsoft Entra ID authorization endpoint.
+	 * Generates a random state and code verifier for PKCE.
+	 * @returns An object containing the authorization URL, state, and code verifier.
+	 */
 	createAuthorizationURL() {
 		const state = generateState();
 		const codeVerifier = generateCodeVerifier();
@@ -171,6 +205,10 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		return { session, user, token };
 	}
 
+	/**
+	 * Generates a session token.
+	 * @returns The generated session token.
+	 */
 	generateSessionToken() {
 		const tokenBytes = new Uint8Array(20);
 		crypto.getRandomValues(tokenBytes);
@@ -178,14 +216,32 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		return token;
 	}
 
+	/**
+	 * Generates a session ID based on a session token.
+	 * @param token The session token to generate an ID for.
+	 * @returns The generated session ID.
+	 */
 	generateSessionId(token: string) {
 		return encodeHexLowerCase(sha256(this.textEncoder.encode(token)));
 	}
 
+	/**
+	 * Converts a session token to a session ID.
+	 * @param token The session token to convert.
+	 * @returns The session ID.
+	 */
 	tokenToSessionId(token: string) {
 		return encodeHexLowerCase(sha256(this.textEncoder.encode(token)));
 	}
 
+	/**
+	 * Acquires a token on behalf of a user for a specified application using the OBO flow.
+	 * Intended to be used in scenarios where you have an access token for a user and need to call another API on their behalf.
+	 *
+	 * @param applicationId - The client ID of the application for which to acquire the token.
+	 * @param accessToken - The access token of the user on whose behalf to acquire the new token.
+	 * @returns A promise that resolves to a Result containing either the acquired session and token or an error.
+	 */
 	acquireTokenOnBehalfOf = tryCatch(
 		async (applicationId: keyof Config, accessToken: string) => {
 			const body = new URLSearchParams({
@@ -237,6 +293,14 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		this.onError,
 	);
 
+	/**
+	 * Acquires a token using the client credentials flow for a specified application.
+	 * Uses the configured defaultScope. Intended to be used for service-to-service
+	 * authentication where no user context is required.
+	 *
+	 * @param applicationId - The client ID of the application for which to acquire the token.
+	 * @returns A promise that resolves to a Result containing either the acquired token or an error.
+	 */
 	acquireTokenByClientCredential = tryCatch(
 		async (applicationId: keyof Config) => {
 			const body = new URLSearchParams({
