@@ -1,19 +1,32 @@
 # Microsoft Entra ID Authentication Provider
 
-OAuth implementation that includes:
-- error handling, with onError hook
-- client credential token acquisition
-- on-behalf-of (OBO) token exchange
-- token request timeout config
-- type safe OBO token exchange - applications will auto complete when calling methods
+[![npm version](https://img.shields.io/npm/v/entra-id-auth-provider)](https://www.npmjs.com/package/entra-id-auth-provider)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-### Example:
+TypeScript OAuth 2.0 implementation for authenticating with Microsoft Entra ID. Supports client credentials, authorization code flow, and on-behalf-of (OBO) token exchange with full type safety.
+
+## Installation
+
+```bash
+pnpm add entra-id-auth-provider
+```
+
+## Prerequisites
+
+Please ensure that you understand the basics of OAuth2.0 and how to setup and configure Microsoft Entra ID applications.
+- [Authorization Code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow)
+- [Client credentials flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow)
+- [On-Behalf-Of (OBO) flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-on-behalf-of-flow)
+
+## Example
 
 ```typescript
+import { AuthProvider } from "entra-id-auth-provider";
+
 const authProvider = new AuthProvider({
-	clientId: "eebaf813-5016-4c25-927b-60d655a09c2f",
-	clientSecret: "my-super-secret",
-	tenantId: "b7c4902c-cc47-4c0f-b347-7093ef5516aa",
+	clientId: process.env.ENTRA_CLIENT_ID,
+	clientSecret: process.env.ENTRA_CLIENT_SECRET,
+	tenantId: process.env.ENTRA_TENANT_ID,
 	scopes: [
 		"api://eebaf813-5016-4c25-927b-60d655a09c2f/access-as",
 		"offline_access",
@@ -22,40 +35,39 @@ const authProvider = new AuthProvider({
 		"email",
 		"User.Read",
 	],
-	redirectUri: "https://example.com/auth/callback",
+	redirectUri: process.env.ENTRA_REDIRECT_URI,
 	oboApplications: {
-		api1: { // Some human readable key or you could use the applications uuid.
+		api1: {
 			scopes: [
                 "api://70e35c7f-7829-4a2a-a230-f0391cf0c097/access-as",
                 "offline_access",
             ],
 		},
 	},
-    // Error callback hook that provides the exception that occurred
     onError: (error) => {
-        Sentry.captureException(error),
+        console.error("Auth error:", error);
     },
-    timeout: 5000, // Timeout after 5 seconds.
+    timeout: 5000,
 });
 
-// Creating the url for start of OAuth2.0 flow:
+// Create authorization URL for OAuth2.0 flow:
 const { 
-    codeVerifier, // AKA "nonce"
+    codeVerifier,
     state, 
     url,
-} = await createAuthProvider.createAuthorizationURL();
+} = await authProvider.createAuthorizationURL();
 
-// After auth redirect your route handler will use this to get the users token, session and user details:
+// After redirect, validate the authorization code:
 const { 
     data: sessionData, 
     error: codeVerificationError,
-} = await createAuthProvider.validateAuthorizationCode(
+} = await authProvider.validateAuthorizationCode(
     "code-provided-from-oauth-flow", 
-    codeVerifier, // AKA "nonce"
+    codeVerifier,
     state
 );
 
-// Provide the refresh token and the application if refreshing for an obo token:
+// Refresh OBO token (provide app key for OBO, none for main app):
 const { 
     data: oboRefreshedSession, 
     error: oboRefreshError,
@@ -64,7 +76,6 @@ const {
     "api1"
 );
 
-// Leave application id blank to refresh the application's token:
 const { 
     data: refreshSession, 
     error: refreshError 
@@ -72,68 +83,89 @@ const {
     "some-app-refresh-token"
 );
 
-// Use this when the application itself needs to get a token for another api:
+// Client credential flow (app-only token):
 const { 
     data: clientToken,
     error: clientTokenError,
-} = await createAuthProvider.acquireTokenByClientCredential(
-    "api1", // Type safe and based off of oboApplications configured via the provider.
+} = await authProvider.acquireTokenByClientCredential(
+    "api1",
 );
 
-// Use this when you want to exchange a user's token for that of another api:
+// On-behalf-of exchange (exchange user's token for another API):
 const { 
     data: userToken, 
     error: userTokenError,
-} = await createAuthProvider.acquireTokenOnBehalfOf(
-    "api1", // Type safe and based off of oboApplications configured via the provider.
-    "some-access-token" // Users access token from main application.
+} = await authProvider.acquireTokenOnBehalfOf(
+    "api1",
+    "some-access-token"
 );
 ```
 
-## Config
+## Configuration
 
-To ensure that you get back a refresh token when authenticating with 
-microsoft, make sure you include `offline_access` in your application 
-scope.
+### AuthProvider Options
 
-To get all the data required to generate a user, you will also need to
-include `openid`, `email`, `profile`, and `User.Read` scopes, and ensure
-that these scopes have been added in the MS Entra ID application, by adding
-graph to the application permissions.
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `clientId` | `string` | Yes | Your Azure AD application (client) ID |
+| `clientSecret` | `string` | Yes | Client secret for your application |
+| `tenantId` | `string` | Yes | Your Azure AD tenant ID |
+| `scopes` | `string[]` | Yes | OAuth scopes to request |
+| `redirectUri` | `string` | Yes | URI to redirect after authentication |
+| `oboApplications` | `Record<string, { scopes: string[] }>` | No | OBO app configurations |
+| `onError` | `(error: Error) => void` | No | Error callback hook |
+| `timeout` | `number` | No | Request timeout in milliseconds |
 
-If you're using any APIs requiring OBO tokens ensure that you include your
-application's api scope in the scopes config array. Something like: 
-`api://eebaf813-5016-4c25-927b-60d655a09c2f/access-as`, where the UUID 
-is your applications id or a custom name you provided, and 
-`access-as` is the suffix added when creating the API scope.
+### Return Values
 
-OBO applications require at least their API scope to be provided or the
-token exchange will failed. Also ensure that the main application has 
-the permissions to access this API.
+All methods return `{ data, error }` where:
+- `data`: The requested data (session, token, etc.) on success
+- `error`: An error object if something went wrong
+
+## Required Scopes
+
+To receive a refresh token, include `offline_access` in your scopes.
+
+To get user profile data, include these scopes and ensure they're configured in your Azure portal:
+- `openid` - Required for OIDC flow
+- `email` - User email address
+- `profile` - Basic profile info
+- `User.Read` - Microsoft Graph API access (add via "Microsoft Graph" > "Delegated permissions" in Azure portal)
+
+For OBO tokens, ensure your main application's API scope is included:
+```
+api://{application-id}/access-as
+```
+Where `access-as` is the suffix you defined when creating the API scope in Azure AD. Also verify the main application has permission to call the OBO API in the Azure portal under "Expose an API".
+
+## Troubleshooting
+
+### "AADSTS7000215: Invalid client secret"
+- Ensure your client secret is correct and hasn't expired
+ value- Check the secret in Azure portal under "Certificates & secrets"
+
+### "AADSTS700016: Application not found"
+- Verify `clientId` matches your application ID in Azure portal
+- Ensure the application is enabled in Azure AD
+
+### OBO token exchange fails
+- Confirm the OBO application's API scope is in `oboApplications` config
+- Verify the main app has "Access tokens" and "ID tokens" enabled in Azure portal authentication settings
+- Ensure user has consented to the required permissions
+
+### No refresh token returned
+- Must include `offline_access` scope
+- In Azure portal, check "Allow offline access" is enabled in authentication settings
 
 ## Development
 
-- Install dependencies:
-
 ```bash
 pnpm install
-```
-
-- Run the unit tests:
-
-```bash
 pnpm test
-```
-
-- Build the library:
-
-```bash
 pnpm build
+pnpm typecheck
 ```
 
-## Tech used
+## License
 
-- [Arctic](https://arcticjs.dev/) for OAuth flow.
-- [@oslojs/crypto](https://www.npmjs.com/package/@oslojs/crypto) for cryptography.
-- [@oslojs/encoding](https://www.npmjs.com/package/@oslojs/encoding) for encoding session tokens.
-- [zod](https://zod.dev/) for token schema validation.
+MIT License - see [LICENSE](LICENSE) for details.
