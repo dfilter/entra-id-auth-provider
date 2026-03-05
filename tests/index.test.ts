@@ -6,6 +6,7 @@ import {
 	AcquireTokenOnBehalfOfError,
 } from "../src/error-handling";
 import { AuthProvider } from "../src/index";
+import { baseIdTokenSchema } from "../src/lib/zod";
 
 vi.mock("arctic");
 
@@ -15,8 +16,14 @@ const createMockOAuth2Tokens = (): OAuth2Tokens => {
 		refreshToken: () => "mock-refresh-token",
 		idToken: () => "mock-id-token",
 		accessTokenExpiresAt: () => new Date(Date.now() + 3600 * 1000),
+		accessTokenExpiresInSeconds: () => 3600,
+		hasRefreshToken: () => true,
+		hasScopes: () => true,
 		scopes: () => ["openid", "profile", "email"],
 		tokenType: () => "Bearer",
+		data: {
+			id_token: "mock-id-token",
+		},
 	} as OAuth2Tokens;
 };
 
@@ -38,6 +45,7 @@ const createTestProvider = (
 				scopes: ["https://graph.microsoft.com/.default"],
 			},
 		},
+		idTokenSchema: baseIdTokenSchema,
 		...overrides,
 	});
 };
@@ -177,14 +185,8 @@ describe("AuthProvider", () => {
 				iat: 1234567890,
 				nbf: 1234567890,
 				exp: 9999999999,
-				acct: 0,
-				email: "test@example.com",
-				name: "Test User",
-				oid: "user-oid-123",
-				preferred_username: "test@example.com",
+				nonce: "mock-nonce",
 				rh: "mock-rh",
-				roles: ["User"],
-				sid: "mock-sid",
 				sub: "mock-sub",
 				tid: "tenant-id",
 				uti: "mock-uti",
@@ -199,9 +201,9 @@ describe("AuthProvider", () => {
 
 			expect(result.error).toBeNull();
 			expect(result.data).toHaveProperty("token");
-			expect(result.data).toHaveProperty("session");
-			expect(result.data).toHaveProperty("user");
-			expect(result.data?.user.email).toBe("test@example.com");
+			expect(result.data).toHaveProperty("sessionId");
+			expect(result.data).toHaveProperty("accessToken");
+			expect(result.data).toHaveProperty("idToken");
 		});
 
 		it("should return error result when validation fails", async () => {
@@ -242,14 +244,8 @@ describe("AuthProvider", () => {
 				iat: 1234567890,
 				nbf: 1234567890,
 				exp: 9999999999,
-				acct: 0,
-				email: "test@example.com",
-				name: "Test User",
-				oid: "user-oid-123",
-				preferred_username: "test@example.com",
+				nonce: "mock-nonce",
 				rh: "mock-rh",
-				roles: ["User"],
-				sid: "mock-sid",
 				sub: "mock-sub",
 				tid: "tenant-id",
 				uti: "mock-uti",
@@ -259,9 +255,10 @@ describe("AuthProvider", () => {
 			const result = await provider.refreshAccessToken("refresh-token");
 
 			expect(result.error).toBeNull();
-			expect(result.data).toHaveProperty("session");
-			expect(result.data).toHaveProperty("user");
+			expect(result.data).toHaveProperty("sessionId");
+			expect(result.data).toHaveProperty("accessToken");
 			expect(result.data).toHaveProperty("token");
+			expect(result.data).toHaveProperty("idToken");
 		});
 
 		it("should return error result when refresh fails", async () => {
@@ -307,8 +304,8 @@ describe("AuthProvider", () => {
 			);
 
 			expect(result.error).toBeNull();
-			expect(result.data).toHaveProperty("session");
-			expect(result.data?.session.accessToken).toBe("obo-access-token");
+			expect(result.data).toHaveProperty("sessionId");
+			expect(result.data?.accessToken).toBe("obo-access-token");
 			expect(result.data).toHaveProperty("token");
 		});
 

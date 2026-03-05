@@ -171,15 +171,23 @@ export class AuthProvider<
 		if (typeof tokens === "string") {
 			idTokenString = tokens;
 		} else {
-			if (!("id_token" in tokens.data)) {
+			if (
+				!("id_token" in tokens.data && typeof tokens.data.id_token === "string")
+			) {
 				return null;
 			}
 			idTokenString = tokens.idToken();
 		}
 
-		const { error, data } = this.idTokenSchema.safeParse(
-			decodeIdToken(idTokenString),
-		);
+		let decodedIdToken: object;
+		try {
+			decodedIdToken = decodeIdToken(idTokenString);
+		} catch (e) {
+			this.onError?.(e instanceof Error ? e : new Error(String(e)));
+			return null;
+		}
+
+		const { error, data } = this.idTokenSchema.safeParse(decodedIdToken);
 		if (error) {
 			this.onError?.(error);
 			return null;
