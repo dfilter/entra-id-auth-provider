@@ -7,14 +7,14 @@ import {
 	MicrosoftEntraId,
 	type OAuth2Tokens,
 } from "arctic";
-import type { ZodObject, z } from "zod";
+import type { z } from "zod";
 import {
 	AcquireTokenByClientCredentialError,
 	AcquireTokenOnBehalfOfError,
 	tryCatch,
 } from "./error-handling";
 import {
-	type baseIdTokenSchema,
+	type BaseIdTokenSchema,
 	defaultTokenSchema,
 	oboTokenSchema,
 } from "./lib/zod";
@@ -32,7 +32,7 @@ import type {
  */
 export class AuthProvider<
 	Config extends OboApplicationConfig,
-	Schema extends ZodObject<typeof baseIdTokenSchema.shape>,
+	Schema extends BaseIdTokenSchema,
 > {
 	/** A function to handle errors that occur during authentication. */
 	onError?: <T extends Error>(error: T) => void | Promise<void>;

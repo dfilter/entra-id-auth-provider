@@ -1,5 +1,4 @@
-import type { ZodObject } from "zod";
-import type { BaseIdToken, baseIdTokenSchema } from "./lib/zod";
+import type { BaseIdToken, BaseIdTokenSchema } from "./lib/zod";
 
 export type OboApplicationConfig = {
 	[clientId: string]: {
@@ -10,7 +9,7 @@ export type OboApplicationConfig = {
 
 export interface IAuthProviderProps<
 	Config extends OboApplicationConfig,
-	Schema extends ZodObject<typeof baseIdTokenSchema.shape>,
+	Schema extends BaseIdTokenSchema,
 > {
 	readonly clientId: string;
 	readonly tenantId: string;
