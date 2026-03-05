@@ -7,18 +7,18 @@ import {
 	MicrosoftEntraId,
 	type OAuth2Tokens,
 } from "arctic";
+import type { ZodObject } from "zod";
 import {
 	AcquireTokenByClientCredentialError,
 	AcquireTokenOnBehalfOfError,
 	tryCatch,
 } from "./error-handling";
-import { defaultTokenSchema, idTokenSchema, oboTokenSchema } from "./lib/zod";
-import type {
-	IAuthProviderProps,
-	OboApplicationConfig,
-	Session,
-	User,
-} from "./types";
+import {
+	type baseIdTokenSchema,
+	defaultTokenSchema,
+	oboTokenSchema,
+} from "./lib/zod";
+import type { IAuthProviderProps, OboApplicationConfig } from "./types";
 
 /**
  * AuthProvider is a class that provides methods for handling authentication with Microsoft Entra ID.
@@ -26,15 +26,19 @@ import type {
  * of users, and acquiring tokens using client credentials. The class is designed to be flexible
  * and can be configured with different applications and scopes.
  */
-export class AuthProvider<Config extends OboApplicationConfig> {
+export class AuthProvider<
+	Config extends OboApplicationConfig,
+	Schema extends ZodObject<typeof baseIdTokenSchema.shape>,
+> {
 	/** A function to handle errors that occur during authentication. */
 	onError?: <T extends Error>(error: T) => void | Promise<void>;
 	/** The timeout for the authentication requests. */
 	readonly timeout?: number;
+	readonly idTokenSchema: Schema;
 
 	private readonly clientSecret: string;
 	private textEncoder = new TextEncoder();
-	private readonly entraId: MicrosoftEntraId;
+	readonly entraId: MicrosoftEntraId;
 
 	/** The client ID for the application. */
 	readonly clientId: string;
@@ -58,7 +62,8 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		oboApplications,
 		scopes,
 		timeout,
-	}: IAuthProviderProps<Config>) {
+		idTokenSchema,
+	}: IAuthProviderProps<Config, Schema>) {
 		this.clientId = clientId;
 		this.clientSecret = clientSecret;
 		this.microsoftOAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
@@ -68,6 +73,7 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		this.scopes = scopes;
 		this.oboApplications = oboApplications;
 		this.timeout = timeout;
+		this.idTokenSchema = idTokenSchema;
 
 		this.entraId = new MicrosoftEntraId(
 			tenantId,
@@ -112,7 +118,7 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 				scopes,
 			);
 
-			return this.formatSessionTokenAndUser(tokens, state);
+			return this.extractTokenData(tokens, state);
 		},
 		this.onError,
 	);
@@ -131,22 +137,7 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 				code,
 				codeVerifier,
 			);
-			const idToken = tokens.idToken();
-			const user = this.userFromIdToken(idToken);
-			const token = this.generateSessionToken();
-			const sessionId = this.generateSessionId(token);
-			const session = {
-				id: sessionId,
-				accessToken: tokens.accessToken(),
-				expiresOn: tokens.accessTokenExpiresAt(),
-				userId: user.id,
-				refreshToken: tokens.refreshToken(),
-				scopes: tokens.scopes().join(" "),
-				tokenType: tokens.tokenType(),
-				state,
-			};
-
-			return { token, session, user };
+			return this.extractTokenData(tokens, state);
 		},
 		this.onError,
 	);
@@ -170,39 +161,47 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 		return { url, state, codeVerifier };
 	}
 
-	private userFromIdToken(idToken: string) {
-		const decodedIdToken = idTokenSchema.parse(decodeIdToken(idToken));
+	/**
+	 * For some reason there aren't any safeguards around trying to access the idToken
+	 * @param tokens
+	 * @returns typed id token object.
+	 */
+	private parseIdToken(tokens: OAuth2Tokens | string) {
+		let idTokenString: string;
+		if (typeof tokens === "string") {
+			idTokenString = tokens;
+		} else {
+			if (!("id_token" in tokens.data)) {
+				return null;
+			}
+			idTokenString = tokens.idToken();
+		}
 
-		const user: User = {
-			email: decodedIdToken.email,
-			id: decodedIdToken.oid,
-			name: decodedIdToken.name,
-			roles: decodedIdToken.roles?.join(" ") ?? null,
-			dateCreated: new Date(),
-			dateUpdated: null,
-			department: null,
-			keystoneInitials: null,
-		};
+		const { error, data } = this.idTokenSchema.safeParse(
+			decodeIdToken(idTokenString),
+		);
+		if (error) {
+			this.onError?.(error);
+			return null;
+		}
 
-		return user;
+		return data;
 	}
 
-	private formatSessionTokenAndUser(tokens: OAuth2Tokens, state?: string) {
-		const idToken = tokens.idToken();
-		const user = this.userFromIdToken(idToken);
+	private extractTokenData(tokens: OAuth2Tokens, state?: string) {
 		const token = this.generateSessionToken();
-		const sessionId = this.generateSessionId(token);
-		const session: Session = {
-			id: sessionId,
+		return {
 			accessToken: tokens.accessToken(),
-			expiresOn: tokens.accessTokenExpiresAt(),
-			refreshToken: tokens.refreshToken(),
-			scopes: tokens.scopes().join(" "),
+			accessTokenExpiresAt: tokens.accessTokenExpiresAt(),
+			accessTokenExpiresInSeconds: tokens.accessTokenExpiresInSeconds(),
+			idToken: this.parseIdToken(tokens),
+			refreshToken: tokens.hasRefreshToken() ? tokens.refreshToken() : null,
+			scopes: tokens.hasScopes() ? tokens.scopes() : [],
+			sessionId: this.generateSessionId(token),
+			state,
+			token,
 			tokenType: tokens.tokenType(),
-			state: state ?? null,
 		};
-
-		return { session, user, token };
 	}
 
 	/**
@@ -275,20 +274,19 @@ export class AuthProvider<Config extends OboApplicationConfig> {
 			}
 
 			const data = oboTokenSchema.parse(await response.json());
-
 			const token = this.generateSessionToken();
-			const sessionId = this.generateSessionId(token);
-			const session: Session = {
-				id: sessionId,
+			return {
 				accessToken: data.access_token,
-				tokenType: data.token_type,
-				expiresOn: new Date(Date.now() + data.expires_in * 1000),
-				scopes: data.scope,
+				accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
+				accessTokenExpiresInSeconds: data.expires_in,
+				idToken: data.id_token ? this.parseIdToken(data.id_token) : null,
 				refreshToken: data.refresh_token ?? null,
+				scopes: data.scope.split(" "),
+				sessionId: this.generateSessionId(token),
 				state: null,
+				token,
+				tokenType: data.token_type,
 			};
-
-			return { session, token };
 		},
 		this.onError,
 	);

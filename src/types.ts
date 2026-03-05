@@ -1,23 +1,5 @@
-export type Session = {
-	id: string;
-	accessToken: string;
-	refreshToken: string | null;
-	tokenType: string;
-	expiresOn: Date | null;
-	scopes: string | null;
-	state: string | null;
-};
-
-export type User = {
-	id: string;
-	name: string | null;
-	email: string;
-	department: string | null;
-	roles: string | null;
-	keystoneInitials: string | null;
-	dateCreated: Date;
-	dateUpdated: Date | null;
-};
+import type { ZodObject } from "zod";
+import type { baseIdTokenSchema } from "./lib/zod";
 
 export type OboApplicationConfig = {
 	[clientId: string]: {
@@ -26,7 +8,10 @@ export type OboApplicationConfig = {
 	};
 };
 
-export interface IAuthProviderProps<Config extends OboApplicationConfig> {
+export interface IAuthProviderProps<
+	Config extends OboApplicationConfig,
+	Schema extends ZodObject<typeof baseIdTokenSchema.shape>,
+> {
 	readonly clientId: string;
 	readonly tenantId: string;
 	readonly clientSecret: string;
@@ -35,6 +20,7 @@ export interface IAuthProviderProps<Config extends OboApplicationConfig> {
 	readonly timeout?: number;
 	onError?: <T extends Error>(error: T) => void | Promise<void>;
 	oboApplications: Config;
+	readonly idTokenSchema: Schema;
 }
 
 type Success<T> = {

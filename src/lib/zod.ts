@@ -14,23 +14,17 @@ export const oboTokenSchema = defaultTokenSchema.extend({
 	id_token: z.string().optional(),
 });
 
-export const idTokenSchema = z.object({
+export const baseIdTokenSchema = z.object({
 	aud: z.string(),
 	iss: z.string(),
 	iat: z.number(),
 	nbf: z.number(),
 	exp: z.number(),
-	acct: z.number(),
-	email: z.string(),
-	name: z.string(),
-	nonce: z.string().optional(),
-	oid: z.string(),
-	preferred_username: z.string(),
+	nonce: z.string(),
 	rh: z.string(),
-	roles: z.string().array().nullish(),
-	sid: z.string(),
 	sub: z.string(),
 	tid: z.string(),
 	uti: z.string(),
 	ver: z.string(),
 });
+export type BaseIdTokenSchema = z.infer<typeof baseIdTokenSchema>;
