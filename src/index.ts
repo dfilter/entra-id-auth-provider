@@ -7,7 +7,7 @@ import {
 	MicrosoftEntraId,
 	type OAuth2Tokens,
 } from "arctic";
-import type { ZodObject } from "zod";
+import type { ZodObject, z } from "zod";
 import {
 	AcquireTokenByClientCredentialError,
 	AcquireTokenOnBehalfOfError,
@@ -18,7 +18,11 @@ import {
 	defaultTokenSchema,
 	oboTokenSchema,
 } from "./lib/zod";
-import type { IAuthProviderProps, OboApplicationConfig } from "./types";
+import type {
+	AuthTokens,
+	IAuthProviderProps,
+	OboApplicationConfig,
+} from "./types";
 
 /**
  * AuthProvider is a class that provides methods for handling authentication with Microsoft Entra ID.
@@ -196,7 +200,10 @@ export class AuthProvider<
 		return data;
 	}
 
-	private extractTokenData(tokens: OAuth2Tokens, state?: string) {
+	private extractTokenData(
+		tokens: OAuth2Tokens,
+		state: string | null = null,
+	): AuthTokens<z.infer<typeof this.idTokenSchema>> {
 		const token = this.generateSessionToken();
 		return {
 			accessToken: tokens.accessToken(),
@@ -250,7 +257,10 @@ export class AuthProvider<
 	 * @returns A promise that resolves to a Result containing either the acquired session and token or an error.
 	 */
 	acquireTokenOnBehalfOf = tryCatch(
-		async (applicationId: keyof Config, accessToken: string) => {
+		async (
+			applicationId: keyof Config,
+			accessToken: string,
+		): Promise<AuthTokens<z.infer<typeof this.idTokenSchema>>> => {
 			const body = new URLSearchParams({
 				grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
 				client_id: this.clientId,

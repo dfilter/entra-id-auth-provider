@@ -1,5 +1,5 @@
 import type { ZodObject } from "zod";
-import type { baseIdTokenSchema } from "./lib/zod";
+import type { BaseIdToken, baseIdTokenSchema } from "./lib/zod";
 
 export type OboApplicationConfig = {
 	[clientId: string]: {
@@ -42,3 +42,16 @@ export interface ErrorProps {
 	statusText: string;
 	props: Record<string, any>;
 }
+
+export type AuthTokens<IdToken extends BaseIdToken> = {
+	accessToken: string;
+	accessTokenExpiresAt: Date;
+	accessTokenExpiresInSeconds: number;
+	idToken: IdToken | null;
+	refreshToken: string | null;
+	scopes: string[];
+	sessionId: string;
+	state: string | null;
+	token: string;
+	tokenType: string;
+};

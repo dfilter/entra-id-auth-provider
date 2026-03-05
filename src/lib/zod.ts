@@ -27,4 +27,4 @@ export const baseIdTokenSchema = z.object({
 	uti: z.string(),
 	ver: z.string(),
 });
-export type BaseIdTokenSchema = z.infer<typeof baseIdTokenSchema>;
+export type BaseIdToken = z.infer<typeof baseIdTokenSchema>;
