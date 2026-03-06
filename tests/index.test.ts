@@ -6,7 +6,6 @@ import {
 	AcquireTokenOnBehalfOfError,
 } from "../src/error-handling";
 import { AuthProvider } from "../src/index";
-import { baseIdTokenSchema } from "../src/lib/zod";
 
 vi.mock("arctic");
 
@@ -38,14 +37,6 @@ const createTestProvider = (
 		clientSecret: "test-client-secret",
 		tenantId: "test-tenant-id",
 		redirectUri: "http://localhost:3000/callback",
-		scopes: ["openid", "profile", "email"],
-		oboApplications: {
-			"app-1": {
-				defaultScope: "https://graph.microsoft.com/.default",
-				scopes: ["https://graph.microsoft.com/.default"],
-			},
-		},
-		idTokenSchema: baseIdTokenSchema,
 		...overrides,
 	});
 };
@@ -69,7 +60,6 @@ describe("AuthProvider", () => {
 			expect(provider.clientId).toBe("test-client-id");
 			expect(provider.tenantId).toBe("test-tenant-id");
 			expect(provider.redirectUri).toBe("http://localhost:3000/callback");
-			expect(provider.scopes).toEqual(["openid", "profile", "email"]);
 		});
 
 		it("should set correct Microsoft OAuth URL", () => {
@@ -96,7 +86,7 @@ describe("AuthProvider", () => {
 				),
 			);
 
-			const { url, state, codeVerifier } = provider.createAuthorizationURL();
+			const { url, state, codeVerifier } = provider.createAuthorizationURL([]);
 
 			expect(url).toBeInstanceOf(URL);
 			expect(state).toBe("mock-state");
@@ -111,17 +101,9 @@ describe("AuthProvider", () => {
 				),
 			);
 
-			const { url } = provider.createAuthorizationURL();
+			const { url } = provider.createAuthorizationURL([]);
 
 			expect(url.searchParams.get("nonce")).toBe("mock-codeverifier");
-		});
-
-		it("should use scopes from config", () => {
-			const provider = createTestProvider();
-
-			expect(provider.scopes).toContain("openid");
-			expect(provider.scopes).toContain("profile");
-			expect(provider.scopes).toContain("email");
 		});
 	});
 
@@ -150,17 +132,6 @@ describe("AuthProvider", () => {
 
 			expect(sessionId).toHaveLength(64);
 			expect(provider.generateSessionId(token)).toBe(sessionId);
-		});
-	});
-
-	describe("tokenToSessionId", () => {
-		it("should return consistent SHA256 hash", () => {
-			const provider = createTestProvider();
-			const token = "test-token";
-
-			expect(provider.tokenToSessionId(token)).toBe(
-				provider.generateSessionId(token),
-			);
 		});
 	});
 
@@ -193,17 +164,15 @@ describe("AuthProvider", () => {
 				ver: "2.0",
 			});
 
-			const result = await provider.validateAuthorizationCode(
-				"auth-code",
-				"code-verifier",
-				"state",
-			);
+			const result = await provider.validateAuthorizationCode({
+				code: "auth-code",
+				codeVerifier: "code-verifier",
+			});
 
 			expect(result.error).toBeNull();
 			expect(result.data).toHaveProperty("token");
 			expect(result.data).toHaveProperty("sessionId");
-			expect(result.data).toHaveProperty("accessToken");
-			expect(result.data).toHaveProperty("idToken");
+			expect(result.data).toHaveProperty("oauth2Tokens");
 		});
 
 		it("should return error result when validation fails", async () => {
@@ -213,11 +182,10 @@ describe("AuthProvider", () => {
 				provider.entraId.validateAuthorizationCode,
 			).mockRejectedValueOnce(new Error("Invalid code"));
 
-			const result = await provider.validateAuthorizationCode(
-				"invalid-code",
-				"verifier",
-				"state",
-			);
+			const result = await provider.validateAuthorizationCode({
+				code: "invalid-code",
+				codeVerifier: "verifier",
+			});
 
 			expect(result.error).toBeDefined();
 		});
@@ -252,13 +220,15 @@ describe("AuthProvider", () => {
 				ver: "2.0",
 			});
 
-			const result = await provider.refreshAccessToken("refresh-token");
+			const result = await provider.refreshAccessToken({
+				refreshToken: "refresh-token",
+				scopes: ["openid", "profile", "email"],
+			});
 
 			expect(result.error).toBeNull();
 			expect(result.data).toHaveProperty("sessionId");
-			expect(result.data).toHaveProperty("accessToken");
 			expect(result.data).toHaveProperty("token");
-			expect(result.data).toHaveProperty("idToken");
+			expect(result.data).toHaveProperty("oauth2Tokens");
 		});
 
 		it("should return error result when refresh fails", async () => {
@@ -268,7 +238,10 @@ describe("AuthProvider", () => {
 				new Error("Invalid refresh token"),
 			);
 
-			const result = await provider.refreshAccessToken("invalid-refresh-token");
+			const result = await provider.refreshAccessToken({
+				refreshToken: "invalid-refresh-token",
+				scopes: ["openid", "profile", "email"],
+			});
 
 			expect(result.error).toBeDefined();
 		});
@@ -298,14 +271,14 @@ describe("AuthProvider", () => {
 				json: () => Promise.resolve(mockResponse),
 			}) as unknown as typeof fetch;
 
-			const result = await provider.acquireTokenOnBehalfOf(
-				"app-1",
-				"user-access-token",
-			);
+			const result = await provider.acquireTokenOnBehalfOf({
+				accessToken: "user-access-token",
+				scopes: ["https://graph.microsoft.com/.default"],
+			});
 
 			expect(result.error).toBeNull();
 			expect(result.data).toHaveProperty("sessionId");
-			expect(result.data?.accessToken).toBe("obo-access-token");
+			expect(result.data).toHaveProperty("oauth2Tokens");
 			expect(result.data).toHaveProperty("token");
 		});
 
@@ -318,10 +291,10 @@ describe("AuthProvider", () => {
 				statusText: "Bad Request",
 			}) as unknown as typeof fetch;
 
-			const result = await provider.acquireTokenOnBehalfOf(
-				"app-1",
-				"user-access-token",
-			);
+			const result = await provider.acquireTokenOnBehalfOf({
+				accessToken: "user-access-token",
+				scopes: ["https://graph.microsoft.com/.default"],
+			});
 
 			expect(result.error).toBeInstanceOf(AcquireTokenOnBehalfOfError);
 		});
@@ -349,10 +322,13 @@ describe("AuthProvider", () => {
 				json: () => Promise.resolve(mockResponse),
 			}) as unknown as typeof fetch;
 
-			const result = await provider.acquireTokenByClientCredential("app-1");
+			const result = await provider.acquireTokenByClientCredential([
+				"https://graph.microsoft.com/.default",
+			]);
 
 			expect(result.error).toBeNull();
-			expect(result.data).toHaveProperty("access_token", "client-cred-token");
+			expect(result.data).toHaveProperty("oauth2Tokens");
+			expect(result.data).toHaveProperty("token");
 		});
 
 		it("should return error on HTTP error", async () => {
@@ -364,7 +340,9 @@ describe("AuthProvider", () => {
 				statusText: "Unauthorized",
 			}) as unknown as typeof fetch;
 
-			const result = await provider.acquireTokenByClientCredential("app-1");
+			const result = await provider.acquireTokenByClientCredential([
+				"https://graph.microsoft.com/.default",
+			]);
 
 			expect(result.error).toBeInstanceOf(AcquireTokenByClientCredentialError);
 		});

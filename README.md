@@ -27,28 +27,11 @@ const authProvider = new AuthProvider({
 	clientId: process.env.ENTRA_CLIENT_ID,
 	clientSecret: process.env.ENTRA_CLIENT_SECRET,
 	tenantId: process.env.ENTRA_TENANT_ID,
-	scopes: [
-		"api://eebaf813-5016-4c25-927b-60d655a09c2f/access-as",
-		"offline_access",
-		"openid",
-		"profile",
-		"email",
-		"User.Read",
-	],
 	redirectUri: process.env.ENTRA_REDIRECT_URI,
-	oboApplications: {
-		api1: {
-            defaultScope: "api://70e35c7f-7829-4a2a-a230-f0391cf0c097/.default"
-			scopes: [
-                "api://70e35c7f-7829-4a2a-a230-f0391cf0c097/access-as",
-                "offline_access",
-            ],
-		},
+	onError: (error) => {
+		console.error("Auth error:", error);
 	},
-    onError: (error) => {
-        console.error("Auth error:", error);
-    },
-    timeout: 5000,
+	timeout: 5000,
 });
 
 // Create authorization URL for OAuth2.0 flow:
@@ -56,50 +39,47 @@ const {
     codeVerifier,
     state, 
     url,
-} = await authProvider.createAuthorizationURL();
+} = authProvider.createAuthorizationURL([
+    "openid",
+    "profile", 
+    "email",
+    "offline_access",
+]);
 
 // After redirect, validate the authorization code:
 const { 
     data: sessionData, 
     error: codeVerificationError,
-} = await authProvider.validateAuthorizationCode(
-    "code-provided-from-oauth-flow", 
-    codeVerifier,
-    state
-);
+} = await authProvider.validateAuthorizationCode({
+    code: "code-provided-from-oauth-flow",
+    codeVerifier: codeVerifier,
+});
 
-// Refresh OBO token (provide app key for OBO, none for main app):
-const { 
-    data: oboRefreshedSession, 
-    error: oboRefreshError,
-} = await authProvider.refreshAccessToken(
-    "some-obo-app-refresh-token",
-    "api1"
-);
-
+// Refresh token:
 const { 
     data: refreshSession, 
     error: refreshError 
-} = await authProvider.refreshAccessToken(
-    "some-app-refresh-token"
-);
+} = await authProvider.refreshAccessToken({
+    refreshToken: "some-refresh-token",
+    scopes: ["openid", "profile", "email"],
+});
 
 // Client credential flow (app-only token):
 const { 
     data: clientToken,
     error: clientTokenError,
-} = await authProvider.acquireTokenByClientCredential(
-    "api1",
-);
+} = await authProvider.acquireTokenByClientCredential([
+    "https://graph.microsoft.com/.default",
+]);
 
 // On-behalf-of exchange (exchange user's token for another API):
 const { 
     data: userToken, 
     error: userTokenError,
-} = await authProvider.acquireTokenOnBehalfOf(
-    "api1",
-    "some-access-token"
-);
+} = await authProvider.acquireTokenOnBehalfOf({
+    accessToken: "some-access-token",
+    scopes: ["https://graph.microsoft.com/.default"],
+});
 ```
 
 ## Configuration
@@ -111,9 +91,7 @@ const {
 | `clientId` | `string` | Yes | Your Azure AD application (client) ID |
 | `clientSecret` | `string` | Yes | Client secret for your application |
 | `tenantId` | `string` | Yes | Your Azure AD tenant ID |
-| `scopes` | `string[]` | Yes | OAuth scopes to request |
 | `redirectUri` | `string` | Yes | URI to redirect after authentication |
-| `oboApplications` | `Record<string, { scopes: string[]; defaultScope: string; }>` | No | OBO app configurations, defaultScope used in acquireTokenByClientCredential |
 | `onError` | `(error: Error) => void` | No | Error callback hook |
 | `timeout` | `number` | No | Request timeout in milliseconds |
 
@@ -122,6 +100,95 @@ const {
 All methods return `{ data, error }` where:
 - `data`: The requested data (session, token, etc.) on success
 - `error`: An error object if something went wrong
+
+## SessionProvider
+
+The `SessionProvider` extends `AuthProvider` and provides session management functionality for storing and retrieving sessions (e.g., in a database or cookies). Use this when you need to manage user sessions with persistent storage.
+
+### SessionProvider Options
+
+Inherits all [AuthProvider options](#authprovider-options), plus:
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `sessionCallbacks` | `object` | Yes | Callbacks for session storage operations |
+
+### SessionCallbacks
+
+| Callback | Type | Description |
+|----------|------|-------------|
+| `selectSession` | `(sessionId: string) => Promise<AuthProviderResponse \| null>` | Retrieve a session from storage |
+| `deleteSession` | `(sessionId: string) => Promise<void>` | Remove a session from storage |
+| `insertSession` | `(authTokens: AuthProviderResponse) => Promise<void>` | Save a new session to storage |
+
+### SessionProvider Methods
+
+| Method | Description |
+|--------|-------------|
+| `get(props)` | Get a session by token. Automatically refreshes if expired. Returns `null` if not found. |
+| `getObo(props)` | Get or acquire an OBO (On-Behalf-Of) session. Automatically exchanges tokens if needed. |
+| `delete(props)` | Delete a session by token or sessionId. |
+
+### SessionProvider Usage Example
+
+```typescript
+import { SessionProvider } from "entra-id-auth-provider";
+
+const sessionProvider = new SessionProvider({
+    clientId: process.env.ENTRA_CLIENT_ID,
+    clientSecret: process.env.ENTRA_CLIENT_SECRET,
+    tenantId: process.env.ENTRA_TENANT_ID,
+    redirectUri: process.env.ENTRA_REDIRECT_URI,
+    sessionCallbacks: {
+        selectSession: async (sessionId) => {
+            // Retrieve from your database/cookie store
+            return await db.sessions.findUnique({ where: { sessionId } });
+        },
+        deleteSession: async (sessionId) => {
+            // Remove from your database/cookie store
+            await db.sessions.delete({ where: { sessionId } });
+        },
+        insertSession: async (authTokens) => {
+            // Save to your database/cookie store
+            await db.sessions.create({ data: authTokens });
+        },
+    },
+});
+
+// Get session (auto-refreshes if expired)
+const session = await sessionProvider.get({
+    token: "user-session-token",
+    scopes: ["openid", "profile", "email"],
+});
+
+// Get or acquire OBO token
+const oboSession = await sessionProvider.getObo({
+    token: "user-session-token",
+    scopes: ["openid", "profile"],
+    oboToken: "obo-session-token",
+    oboScopes: ["https://graph.microsoft.com/.default"],
+});
+
+// Delete session
+await sessionProvider.delete({ token: "user-session-token" });
+```
+
+### GetSessionProps
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `token` | `string` | Yes | The session token |
+| `scopes` | `string[]` | Yes | OAuth |
+| `readonly scopes to useCookies` | `boolean` | No | If `false`, saves refreshed tokens to storage (default: `true`) |
+
+### GetOboSessionProps
+
+Extends `GetSessionProps` with:
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `oboToken` | `string` | Yes | The OBO session token |
+| `oboScopes` | `string[]` | Yes | The scopes for the OBO token |
 
 ## Required Scopes
 
@@ -143,16 +210,16 @@ Where `access-as` is the suffix you defined when creating the API scope in Azure
 
 ### "AADSTS7000215: Invalid client secret"
 - Ensure your client secret is correct and hasn't expired
- value- Check the secret in Azure portal under "Certificates & secrets"
+- Check the secret in Azure portal under "Certificates & secrets"
 
 ### "AADSTS700016: Application not found"
 - Verify `clientId` matches your application ID in Azure portal
 - Ensure the application is enabled in Azure AD
 
 ### OBO token exchange fails
-- Confirm the OBO application's API scope is in `oboApplications` config
 - Verify the main app has "Access tokens" and "ID tokens" enabled in Azure portal authentication settings
 - Ensure user has consented to the required permissions
+- Make sure the access token has the appropriate scopes for the OBO flow
 
 ### No refresh token returned
 - Must include `offline_access` scope
