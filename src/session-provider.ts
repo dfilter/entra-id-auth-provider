@@ -29,7 +29,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 		}
 
 		if (!readonlyCookies) {
-			await this.sessionCallbacks.insert(data);
+			await this.sessionCallbacks.insert({ authTokens: data, scopes });
 		}
 
 		return data;
@@ -103,7 +103,10 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 		}
 
 		if (!readonlyCookies) {
-			await this.sessionCallbacks.insert(data);
+			await this.sessionCallbacks.insert({
+				authTokens: data,
+				scopes: oboScopes,
+			});
 		}
 
 		return data;

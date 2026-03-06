@@ -1,7 +1,11 @@
 import type { OAuth2Tokens } from "arctic";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionProvider } from "../src/index";
-import type { AuthProviderResponse, SelectSessionProps } from "../src/types";
+import type {
+	AuthProviderResponse,
+	InsertSessionProps,
+	SelectSessionProps,
+} from "../src/types";
 
 vi.mock("arctic");
 
@@ -42,7 +46,7 @@ const createTestSessionProvider = (
 			props: SelectSessionProps,
 		) => Promise<AuthProviderResponse | null>;
 		delete?: (sessionId: string) => Promise<void>;
-		insert?: (authTokens: AuthProviderResponse) => Promise<void>;
+		insert?: (props: InsertSessionProps) => Promise<void>;
 	},
 ) => {
 	return new SessionProvider({
@@ -176,7 +180,7 @@ describe("SessionProvider", () => {
 			const expiredSession = createMockSession(new Date(Date.now() - 1000));
 			const refreshedSession = createMockSession();
 
-			const insertSessionSpy = vi.fn();
+			const insertSessionSpy = vi.fn(async (props: InsertSessionProps) => {});
 			const provider = createTestSessionProvider(undefined, {
 				select: async () => expiredSession,
 				insert: insertSessionSpy,
@@ -193,7 +197,10 @@ describe("SessionProvider", () => {
 				readonlyCookies: false,
 			});
 
-			expect(insertSessionSpy).toHaveBeenCalledWith(refreshedSession);
+			expect(insertSessionSpy).toHaveBeenCalledWith({
+				authTokens: refreshedSession,
+				scopes: ["openid", "profile"],
+			});
 			expect(result).not.toBeNull();
 		});
 	});

@@ -121,10 +121,15 @@ export type SelectSessionProps = {
 	sessionId: string;
 };
 
+export type InsertSessionProps = {
+	authTokens: AuthProviderResponse;
+	scopes: string[];
+};
+
 export interface SessionProviderCallbacks {
-	select: (prop: SelectSessionProps) => Promise<AuthProviderResponse | null>;
+	select: (props: SelectSessionProps) => Promise<AuthProviderResponse | null>;
 	delete: (sessionId: string) => Promise<void>;
-	insert: (authTokens: AuthProviderResponse) => Promise<void>;
+	insert: (props: InsertSessionProps) => Promise<void>;
 }
 
 export type DeleteSessionProps =
