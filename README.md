@@ -151,6 +151,8 @@ const sessionProvider = new SessionProvider({
         },
         insert: async (authTokens) => {
             // Save to your database/cookie store
+            // If idToken needs to be used to create the user
+            // make sure to use decodeIdToken in conjunction with a schema or something.
             await db.sessions.create({ data: authTokens });
         },
     },
