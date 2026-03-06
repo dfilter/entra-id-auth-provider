@@ -117,9 +117,9 @@ Inherits all [AuthProvider options](#authprovider-options), plus:
 
 | Callback | Type | Description |
 |----------|------|-------------|
-| `selectSession` | `(sessionId: string) => Promise<AuthProviderResponse \| null>` | Retrieve a session from storage |
-| `deleteSession` | `(sessionId: string) => Promise<void>` | Remove a session from storage |
-| `insertSession` | `(authTokens: AuthProviderResponse) => Promise<void>` | Save a new session to storage |
+| `select` | `(sessionId: string) => Promise<AuthProviderResponse \| null>` | Retrieve a session from storage |
+| `delete` | `(sessionId: string) => Promise<void>` | Remove a session from storage |
+| `insert` | `(authTokens: AuthProviderResponse) => Promise<void>` | Save a new session to storage |
 
 ### SessionProvider Methods
 
@@ -140,15 +140,16 @@ const sessionProvider = new SessionProvider({
     tenantId: process.env.ENTRA_TENANT_ID,
     redirectUri: process.env.ENTRA_REDIRECT_URI,
     sessionCallbacks: {
-        selectSession: async (sessionId) => {
+        select: async (sessionId) => {
             // Retrieve from your database/cookie store
+            // Note: you will need to wrap the results in OAuth2Tokens object. And wrap that in AuthProviderResponse
             return await db.sessions.findUnique({ where: { sessionId } });
         },
-        deleteSession: async (sessionId) => {
+        delete: async (sessionId) => {
             // Remove from your database/cookie store
             await db.sessions.delete({ where: { sessionId } });
         },
-        insertSession: async (authTokens) => {
+        insert: async (authTokens) => {
             // Save to your database/cookie store
             await db.sessions.create({ data: authTokens });
         },

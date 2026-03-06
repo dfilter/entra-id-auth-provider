@@ -38,9 +38,9 @@ const createTestSessionProvider = (
 		onError?: (error: Error) => void | Promise<void>;
 	}>,
 	callbacks?: {
-		selectSession?: (sessionId: string) => Promise<AuthProviderResponse | null>;
-		deleteSession?: (sessionId: string) => Promise<void>;
-		insertSession?: (authTokens: AuthProviderResponse) => Promise<void>;
+		select?: (sessionId: string) => Promise<AuthProviderResponse | null>;
+		delete?: (sessionId: string) => Promise<void>;
+		insert?: (authTokens: AuthProviderResponse) => Promise<void>;
 	},
 ) => {
 	return new SessionProvider({
@@ -49,9 +49,9 @@ const createTestSessionProvider = (
 		tenantId: "test-tenant-id",
 		redirectUri: "http://localhost:3000/callback",
 		sessionCallbacks: {
-			selectSession: async () => null,
-			deleteSession: async () => {},
-			insertSession: async () => {},
+			select: async () => null,
+			delete: async () => {},
+			insert: async () => {},
 			...callbacks,
 		},
 		...overrides,
@@ -88,7 +88,7 @@ describe("SessionProvider", () => {
 		it("should return session when token is valid and not expired", async () => {
 			const mockSession = createMockSession();
 			const provider = createTestSessionProvider(undefined, {
-				selectSession: async () => mockSession,
+				select: async () => mockSession,
 			});
 
 			const result = await provider.get({
@@ -102,7 +102,7 @@ describe("SessionProvider", () => {
 
 		it("should return null when session does not exist", async () => {
 			const provider = createTestSessionProvider(undefined, {
-				selectSession: async () => null,
+				select: async () => null,
 			});
 
 			const result = await provider.get({
@@ -118,7 +118,7 @@ describe("SessionProvider", () => {
 			const refreshedSession = createMockSession();
 
 			const provider = createTestSessionProvider(undefined, {
-				selectSession: async () => expiredSession,
+				select: async () => expiredSession,
 			});
 
 			vi.spyOn(provider, "refreshAccessToken").mockResolvedValue({
@@ -155,8 +155,8 @@ describe("SessionProvider", () => {
 
 			const deleteSessionSpy = vi.fn();
 			const provider = createTestSessionProvider(undefined, {
-				selectSession: async () => expiredSessionWithoutRefresh,
-				deleteSession: deleteSessionSpy,
+				select: async () => expiredSessionWithoutRefresh,
+				delete: deleteSessionSpy,
 			});
 
 			const result = await provider.get({
@@ -176,8 +176,8 @@ describe("SessionProvider", () => {
 
 			const insertSessionSpy = vi.fn();
 			const provider = createTestSessionProvider(undefined, {
-				selectSession: async () => expiredSession,
-				insertSession: insertSessionSpy,
+				select: async () => expiredSession,
+				insert: insertSessionSpy,
 			});
 
 			vi.spyOn(provider, "refreshAccessToken").mockResolvedValue({
@@ -209,7 +209,7 @@ describe("SessionProvider", () => {
 		it("should return existing OBO session when valid", async () => {
 			const oboSession = createMockSession();
 			const provider = createTestSessionProvider(undefined, {
-				selectSession: async () => oboSession,
+				select: async () => oboSession,
 			});
 
 			const result = await provider.getObo({
@@ -225,7 +225,7 @@ describe("SessionProvider", () => {
 
 		it("should return null when OBO session does not exist and main session also does not exist", async () => {
 			const provider = createTestSessionProvider(undefined, {
-				selectSession: async () => null,
+				select: async () => null,
 			});
 
 			const result = await provider.getObo({
@@ -252,7 +252,7 @@ describe("SessionProvider", () => {
 		it("should call deleteSession with generated sessionId when only token provided", async () => {
 			const deleteSessionSpy = vi.fn();
 			const provider = createTestSessionProvider(undefined, {
-				deleteSession: deleteSessionSpy,
+				delete: deleteSessionSpy,
 			});
 
 			await provider.delete({ token: "test-token" });
@@ -265,7 +265,7 @@ describe("SessionProvider", () => {
 		it("should call deleteSession with provided sessionId", async () => {
 			const deleteSessionSpy = vi.fn();
 			const provider = createTestSessionProvider(undefined, {
-				deleteSession: deleteSessionSpy,
+				delete: deleteSessionSpy,
 			});
 
 			await provider.delete({ sessionId: "custom-session-id" });

@@ -108,9 +108,9 @@ export type RefreshSessionProps = {
 };
 
 export interface SessionProviderCallbacks {
-	selectSession: (sessionId: string) => Promise<AuthProviderResponse | null>;
-	deleteSession: (sessionId: string) => Promise<void>;
-	insertSession: (authTokens: AuthProviderResponse) => Promise<void>;
+	select: (sessionId: string) => Promise<AuthProviderResponse | null>;
+	delete: (sessionId: string) => Promise<void>;
+	insert: (authTokens: AuthProviderResponse) => Promise<void>;
 }
 
 export type DeleteSessionProps =

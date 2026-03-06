@@ -29,7 +29,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 		}
 
 		if (!readonlyCookies) {
-			await this.sessionCallbacks.insertSession(data);
+			await this.sessionCallbacks.insert(data);
 		}
 
 		return data;
@@ -39,7 +39,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 	 * Delete the session.
 	 */
 	async delete({ token, sessionId }: DeleteSessionProps) {
-		await this.sessionCallbacks.deleteSession(
+		await this.sessionCallbacks.delete(
 			sessionId ?? this.generateSessionId(token),
 		);
 	}
@@ -49,7 +49,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 	 */
 	async get({ token, scopes, readonlyCookies = true }: GetSessionProps) {
 		const sessionId = this.generateSessionId(token);
-		const session = await this.sessionCallbacks.selectSession(sessionId);
+		const session = await this.sessionCallbacks.select(sessionId);
 		if (!session) {
 			return null;
 		}
@@ -103,7 +103,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 		}
 
 		if (!readonlyCookies) {
-			await this.sessionCallbacks.insertSession(data);
+			await this.sessionCallbacks.insert(data);
 		}
 
 		return data;
