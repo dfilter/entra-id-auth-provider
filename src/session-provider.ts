@@ -49,7 +49,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 	 */
 	async get({ token, scopes, readonlyCookies = true }: GetSessionProps) {
 		const sessionId = this.generateSessionId(token);
-		const session = await this.sessionCallbacks.select(sessionId);
+		const session = await this.sessionCallbacks.select({ sessionId, token });
 		if (!session) {
 			return null;
 		}

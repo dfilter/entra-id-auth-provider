@@ -1,7 +1,7 @@
 import type { OAuth2Tokens } from "arctic";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionProvider } from "../src/index";
-import type { AuthProviderResponse } from "../src/types";
+import type { AuthProviderResponse, SelectSessionProps } from "../src/types";
 
 vi.mock("arctic");
 
@@ -38,7 +38,9 @@ const createTestSessionProvider = (
 		onError?: (error: Error) => void | Promise<void>;
 	}>,
 	callbacks?: {
-		select?: (sessionId: string) => Promise<AuthProviderResponse | null>;
+		select?: (
+			props: SelectSessionProps,
+		) => Promise<AuthProviderResponse | null>;
 		delete?: (sessionId: string) => Promise<void>;
 		insert?: (authTokens: AuthProviderResponse) => Promise<void>;
 	},

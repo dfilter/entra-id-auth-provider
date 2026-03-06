@@ -107,8 +107,13 @@ export type RefreshSessionProps = {
 	readonlyCookies?: boolean;
 };
 
+export type SelectSessionProps = {
+	token: string;
+	sessionId: string;
+};
+
 export interface SessionProviderCallbacks {
-	select: (sessionId: string) => Promise<AuthProviderResponse | null>;
+	select: (prop: SelectSessionProps) => Promise<AuthProviderResponse | null>;
 	delete: (sessionId: string) => Promise<void>;
 	insert: (authTokens: AuthProviderResponse) => Promise<void>;
 }
