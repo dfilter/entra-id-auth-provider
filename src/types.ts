@@ -20,6 +20,15 @@ export interface ErrorProps {
 	props: Record<string, any>;
 }
 
+export type OAuth2TokensProps = {
+	token_type: string;
+	access_token: string;
+	expires_in: string;
+	refresh_token?: string;
+	scope?: string;
+	id_token?: string;
+};
+
 export type AuthProviderCallbacks = {
 	onError?: (error: Error) => Promise<void> | void;
 };
