@@ -23,7 +23,7 @@ export interface ErrorProps {
 export type OAuth2TokensProps = {
 	token_type: string;
 	access_token: string;
-	expires_in: string;
+	expires_in: number;
 	refresh_token?: string;
 	scope?: string;
 	id_token?: string;
