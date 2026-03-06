@@ -1,47 +1,46 @@
 {
-	"name": "entra-id-auth-provider",
-	"type": "module",
-	"version": "0.1.4",
-	"description": "OAuth package for authenticating with Microsoft Entra ID.",
-	"author": "Dirk Filter <dirk_filter@outlook.com>",
-	"license": "MIT",
-	"homepage": "https://github.com/dfilter/entra-id-auth-provider#readme",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/dfilter/entra-id-auth-provider.git"
-	},
-	"bugs": {
-		"url": "https://github.com/dfilter/entra-id-auth-provider/issues"
-	},
-	"exports": {
-		".": "./dist/index.mjs",
-		"./package.json": "./package.json"
-	},
-	"main": "./dist/index.mjs",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.mts",
-	"files": [
-		"dist"
-	],
-	"scripts": {
-		"build": "tsdown",
-		"dev": "tsdown --watch",
-		"test": "vitest",
-		"typecheck": "tsc --noEmit",
-		"release": "pnpm typecheck && vitest --run && bumpp && tsdown && pnpm publish"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "2.4.5",
-		"@types/node": "^25.0.3",
-		"bumpp": "^10.3.2",
-		"tsdown": "^0.18.1",
-		"typescript": "^5.9.3",
-		"vitest": "^4.0.16"
-	},
-	"dependencies": {
-		"@oslojs/crypto": "^1.0.1",
-		"@oslojs/encoding": "^1.1.0",
-		"arctic": "^3.7.0",
-		"zod": "^4.3.6"
-	}
+  "name": "entra-id-auth-provider",
+  "type": "module",
+  "version": "0.1.4",
+  "description": "OAuth package for authenticating with Microsoft Entra ID.",
+  "author": "Dirk Filter <dirk_filter@outlook.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/dfilter/entra-id-auth-provider#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dfilter/entra-id-auth-provider.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dfilter/entra-id-auth-provider/issues"
+  },
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "release": "pnpm typecheck && vitest --run && bumpp && tsdown && pnpm publish"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.5",
+    "@types/node": "^25.0.3",
+    "bumpp": "^10.3.2",
+    "tsdown": "^0.18.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "@oslojs/crypto": "^1.0.1",
+    "@oslojs/encoding": "^1.1.0",
+    "arctic": "^3.7.0"
+  }
 }
