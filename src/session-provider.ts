@@ -1,52 +1,21 @@
 import { AuthProvider } from "./";
 import type {
-	AuthProviderCallbacks,
-	AuthProviderProps,
-	AuthProviderResponse,
+	DeleteSessionProps,
 	GetOboSessionProps,
 	GetSessionProps,
-	IAuthProvider,
+	ISessionProvider,
 	RefreshSessionProps,
+	SessionProviderCallbacks,
+	SessionProviderProps,
 } from "./types";
 
-interface SessionProviderCallbacks extends AuthProviderCallbacks {
-	selectSession: (sessionId: string) => Promise<AuthProviderResponse | null>;
-	deleteSession: (sessionId: string) => Promise<void>;
-	updateSession: (
-		sessionId: string,
-		authTokens: AuthProviderResponse,
-	) => Promise<void>;
-	insertSession: (authTokens: AuthProviderResponse) => Promise<void>;
-	onNoSession?: () => never;
-}
+export class SessionProvider extends AuthProvider implements ISessionProvider {
+	private readonly sessionCallbacks: SessionProviderCallbacks;
 
-type DeleteSessionProps =
-	| { token: string; sessionId?: undefined }
-	| { token?: undefined; sessionId: string };
+	constructor({ sessionCallbacks, ...rest }: SessionProviderProps) {
+		super({ ...rest });
 
-interface SessionProviderProps extends AuthProviderProps {
-	readonly callbacks: SessionProviderCallbacks;
-}
-
-interface ISessionProvider extends IAuthProvider {
-	delete: (props: DeleteSessionProps) => Promise<void>;
-	get: (token: string, readonlyCookies?: boolean) => Promise<void>;
-}
-
-export class SessionProvider extends AuthProvider {
-	protected readonly callbacks: SessionProviderCallbacks;
-
-	constructor({ callbacks, ...rest }: SessionProviderProps) {
-		const authProviderCallbacks = callbacks.onError && {
-			onError: callbacks.onError,
-		};
-		super({ ...rest, callbacks: authProviderCallbacks });
-
-		this.callbacks = callbacks;
-	}
-
-	private shouldTokenRefresh(expiresOn: Date | null) {
-		return !expiresOn || Date.now() <= expiresOn.getTime();
+		this.sessionCallbacks = sessionCallbacks;
 	}
 
 	private async refresh({
@@ -54,37 +23,40 @@ export class SessionProvider extends AuthProvider {
 		scopes,
 		readonlyCookies = true,
 	}: RefreshSessionProps) {
-		const { data } = await this.refreshAccessToken(refreshToken, scopes);
+		const { data } = await this.refreshAccessToken({ refreshToken, scopes });
 		if (!data) {
-			this.callbacks.onNoSession?.();
 			return null;
 		}
 
 		if (!readonlyCookies) {
-			await this.callbacks.insertSession(data);
+			await this.sessionCallbacks.insertSession(data);
 		}
 
 		return data;
 	}
 
+	/**
+	 * Delete the session.
+	 */
 	async delete({ token, sessionId }: DeleteSessionProps) {
-		await this.callbacks.deleteSession(
+		await this.sessionCallbacks.deleteSession(
 			sessionId ?? this.generateSessionId(token),
 		);
 	}
 
+	/**
+	 * Can be used for any application.
+	 */
 	async get({ token, scopes, readonlyCookies = true }: GetSessionProps) {
 		const sessionId = this.generateSessionId(token);
-		const session = await this.callbacks.selectSession(sessionId);
+		const session = await this.sessionCallbacks.selectSession(sessionId);
 		if (!session) {
-			this.callbacks.onNoSession?.();
 			return null;
 		}
 
-		if (this.shouldTokenRefresh(session.oauth2Tokens.accessTokenExpiresAt())) {
-			if (!session.oauth2Tokens.hasRefreshToken()) {
-				await this.delete({ sessionId });
-				this.callbacks.onNoSession?.();
+		if (Date.now() >= session.oauth2Tokens.accessTokenExpiresAt().getTime()) {
+			await this.delete({ sessionId });
+			if (session.oauth2Tokens.hasRefreshToken()) {
 				return null;
 			}
 			return this.refresh({
@@ -97,48 +69,9 @@ export class SessionProvider extends AuthProvider {
 		return session;
 	}
 
-	private async getOboFlow({
-		oboScopes,
-		oboToken,
-		scopes,
-		token,
-		readonlyCookies,
-	}: GetOboSessionProps) {
-		let session = await this.get({ scopes, token, readonlyCookies });
-		if (!session) {
-			this.callbacks.onNoSession?.();
-			return null;
-		}
-
-		if (this.shouldTokenRefresh(session.oauth2Tokens.accessTokenExpiresAt())) {
-			if (!session.oauth2Tokens.hasRefreshToken()) {
-				this.callbacks.onNoSession?.();
-				return null;
-			}
-			const _session = await this.refresh({
-				refreshToken: session.oauth2Tokens.refreshToken(),
-				scopes,
-				readonlyCookies,
-			});
-			if (!_session) {
-				this.callbacks.onNoSession?.();
-				return null;
-			}
-			session = _session;
-		}
-
-		const { data } = await this.acquireTokenOnBehalfOf(
-			session.oauth2Tokens.accessToken(),
-			oboScopes,
-		);
-		if (!data) {
-			await this.delete({ token: oboToken });
-			this.callbacks.onNoSession?.();
-			return null;
-		}
-		return data;
-	}
-
+	/**
+	 * Should be used strictly for obo tokens. Don't use it for regular tokens.
+	 */
 	async getObo({
 		token,
 		scopes,
@@ -146,46 +79,33 @@ export class SessionProvider extends AuthProvider {
 		oboScopes,
 		readonlyCookies = true,
 	}: GetOboSessionProps) {
-		const oboSessionId = this.generateSessionId(oboToken);
-		const oboSession = await this.callbacks.selectSession(oboSessionId);
-
-		if (!oboSession) {
-			return await this.getOboFlow({
-				oboScopes,
-				oboToken,
-				scopes,
-				token,
-				readonlyCookies,
-			});
+		const oboSession = await this.get({
+			token: oboToken,
+			scopes: oboScopes,
+			readonlyCookies,
+		});
+		if (oboSession) {
+			return oboSession;
 		}
 
-		if (
-			this.shouldTokenRefresh(oboSession.oauth2Tokens.accessTokenExpiresAt())
-		) {
-			if (!oboSession.oauth2Tokens.hasRefreshToken()) {
-				await this.delete({ sessionId: oboSessionId });
-				this.callbacks.onNoSession?.();
-				return null;
-			}
-
-			const refreshedOboSession = await this.refresh({
-				refreshToken: oboSession.oauth2Tokens.refreshToken(),
-				scopes: oboScopes,
-				readonlyCookies,
-			});
-			if (refreshedOboSession) {
-				return refreshedOboSession;
-			}
-
-			return await this.getOboFlow({
-				oboScopes,
-				oboToken,
-				scopes,
-				token,
-				readonlyCookies,
-			});
+		const session = await this.get({ scopes, token, readonlyCookies });
+		if (!session) {
+			return null;
 		}
 
-		return oboSession;
+		const { data } = await this.acquireTokenOnBehalfOf({
+			accessToken: session.oauth2Tokens.accessToken(),
+			scopes: oboScopes,
+		});
+		if (!data) {
+			await this.delete({ token: oboToken });
+			return null;
+		}
+
+		if (!readonlyCookies) {
+			await this.sessionCallbacks.insertSession(data);
+		}
+
+		return data;
 	}
 }
