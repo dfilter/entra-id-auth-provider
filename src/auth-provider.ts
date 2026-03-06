@@ -38,7 +38,7 @@ export class AuthProvider implements IAuthProvider {
 
 	private readonly clientSecret: string;
 	readonly textEncoder = new TextEncoder();
-	private readonly entraId: MicrosoftEntraId;
+	readonly entraId: MicrosoftEntraId;
 
 	/** The client ID for the application. */
 	readonly clientId: string;
