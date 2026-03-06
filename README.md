@@ -182,7 +182,7 @@ await sessionProvider.delete({ token: "user-session-token" });
 |----------|------|----------|-------------|
 | `token` | `string` | Yes | The session token |
 | `scopes` | `string[]` | Yes | OAuth |
-| `readonly scopes to useCookies` | `boolean` | No | If `false`, saves refreshed tokens to storage (default: `true`) |
+| `readonlyCookies` | `boolean` | No | If `false`, saves refreshed tokens to storage (default: `true`) |
 
 ### GetOboSessionProps
 
@@ -203,11 +203,17 @@ To get user profile data, include these scopes and ensure they're configured in 
 - `profile` - Basic profile info
 - `User.Read` - Microsoft Graph API access (add via "Microsoft Graph" > "Delegated permissions" in Azure portal)
 
-For OBO tokens, ensure your main application's API scope is included:
+For OBO tokens, ensure the obo application's API scope is included:
 ```
 api://{application-id}/access-as
 ```
 Where `access-as` is the suffix you defined when creating the API scope in Azure AD. Also verify the main application has permission to call the OBO API in the Azure portal under "Expose an API".
+
+For client credentials acquisition you'd want to use the the applications api scope but with the `.default` suffix
+```
+api://{application-id}/.default
+```
+No other scopes are required since you won't get an id_token
 
 ## Troubleshooting
 
