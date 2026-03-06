@@ -1,14 +1,11 @@
 import type { OAuth2Tokens } from "arctic";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AuthProvider } from "../src/auth-provider";
 import { SessionProvider } from "../src/index";
 import type { AuthProviderResponse } from "../src/types";
 
 vi.mock("arctic");
 
-const createMockOAuth2Tokens = (
-	expiresAt?: Date,
-): OAuth2Tokens => {
+const createMockOAuth2Tokens = (expiresAt?: Date): OAuth2Tokens => {
 	const expiry = expiresAt ?? new Date(Date.now() + 3600 * 1000);
 	return {
 		accessToken: () => "mock-access-token",
@@ -26,9 +23,7 @@ const createMockOAuth2Tokens = (
 	} as OAuth2Tokens;
 };
 
-const createMockSession = (
-	expiresAt?: Date,
-): AuthProviderResponse => {
+const createMockSession = (expiresAt?: Date): AuthProviderResponse => {
 	const oauth2Tokens = createMockOAuth2Tokens(expiresAt);
 	return {
 		token: "mock-session-token",
