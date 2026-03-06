@@ -270,5 +270,6 @@ export class AuthProvider implements IAuthProvider {
   );
 }
 
+export { OAuth2Tokens };
 export * from "./error-handling";
 export * from "./types";
