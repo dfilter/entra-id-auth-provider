@@ -56,7 +56,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 
 		if (Date.now() >= session.oauth2Tokens.accessTokenExpiresAt().getTime()) {
 			await this.delete({ sessionId });
-			if (session.oauth2Tokens.hasRefreshToken()) {
+			if (!session.oauth2Tokens.hasRefreshToken()) {
 				return null;
 			}
 			return this.refresh({
