@@ -1,7 +1,7 @@
 {
   "name": "entra-id-auth-provider",
   "type": "module",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "OAuth package for authenticating with Microsoft Entra ID.",
   "author": "Dirk Filter <dirk_filter@outlook.com>",
   "license": "MIT",
