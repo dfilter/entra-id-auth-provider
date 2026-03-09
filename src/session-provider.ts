@@ -9,7 +9,7 @@ import type {
 	SessionProviderProps,
 } from "./types";
 
-export class SessionProvider<State>
+export class SessionProvider<State = unknown>
 	extends AuthProvider
 	implements ISessionProvider<State>
 {

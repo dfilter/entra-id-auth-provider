@@ -43,10 +43,10 @@ const createTestSessionProvider = (
 	}>,
 	callbacks?: {
 		select?: (
-			props: SelectSessionProps,
+			props: SelectSessionProps<unknown>,
 		) => Promise<AuthProviderResponse | null>;
-		delete?: (sessionId: string) => Promise<void>;
-		insert?: (props: InsertSessionProps) => Promise<void>;
+		delete?: (props: { sessionId: string; state?: unknown }) => Promise<void>;
+		insert?: (props: InsertSessionProps<unknown>) => Promise<void>;
 	},
 ) => {
 	return new SessionProvider({
@@ -170,9 +170,10 @@ describe("SessionProvider", () => {
 				scopes: ["openid", "profile"],
 			});
 
-			expect(deleteSessionSpy).toHaveBeenCalledWith(
-				provider.generateSessionId("test-token"),
-			);
+			expect(deleteSessionSpy).toHaveBeenCalledWith({
+				sessionId: provider.generateSessionId("test-token"),
+				state: undefined,
+			});
 			expect(result).toBeNull();
 		});
 
@@ -180,7 +181,9 @@ describe("SessionProvider", () => {
 			const expiredSession = createMockSession(new Date(Date.now() - 1000));
 			const refreshedSession = createMockSession();
 
-			const insertSessionSpy = vi.fn(async (props: InsertSessionProps) => {});
+			const insertSessionSpy = vi.fn(
+				async (props: InsertSessionProps<unknown>) => {},
+			);
 			const provider = createTestSessionProvider(undefined, {
 				select: async () => expiredSession,
 				insert: insertSessionSpy,
@@ -200,6 +203,7 @@ describe("SessionProvider", () => {
 			expect(insertSessionSpy).toHaveBeenCalledWith({
 				authTokens: refreshedSession,
 				scopes: ["openid", "profile"],
+				state: undefined,
 			});
 			expect(result).not.toBeNull();
 		});
@@ -266,9 +270,10 @@ describe("SessionProvider", () => {
 
 			await provider.delete({ token: "test-token" });
 
-			expect(deleteSessionSpy).toHaveBeenCalledWith(
-				provider.generateSessionId("test-token"),
-			);
+			expect(deleteSessionSpy).toHaveBeenCalledWith({
+				sessionId: provider.generateSessionId("test-token"),
+				state: undefined,
+			});
 		});
 
 		it("should call deleteSession with provided sessionId", async () => {
@@ -279,7 +284,132 @@ describe("SessionProvider", () => {
 
 			await provider.delete({ sessionId: "custom-session-id" });
 
-			expect(deleteSessionSpy).toHaveBeenCalledWith("custom-session-id");
+			expect(deleteSessionSpy).toHaveBeenCalledWith({
+				sessionId: "custom-session-id",
+				state: undefined,
+			});
+		});
+	});
+
+	describe("state flow", () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+			vi.clearAllMocks();
+		});
+
+		it("should pass state to select callback in get()", async () => {
+			const mockSession = createMockSession();
+			const selectSpy = vi.fn(async () => mockSession);
+			const provider = createTestSessionProvider(undefined, {
+				select: selectSpy,
+			});
+
+			const customState = { userId: "123" };
+			await provider.get({
+				token: "test-token",
+				scopes: ["openid", "profile"],
+				state: customState,
+			});
+
+			expect(selectSpy).toHaveBeenCalledWith({
+				token: "test-token",
+				sessionId: provider.generateSessionId("test-token"),
+				state: customState,
+			});
+		});
+
+		it("should pass state to delete callback in get() when expired", async () => {
+			const expiredSession = createMockSession(new Date(Date.now() - 1000));
+			const deleteSpy = vi.fn();
+			const provider = createTestSessionProvider(undefined, {
+				select: async () => expiredSession,
+				delete: deleteSpy,
+			});
+
+			const customState = { userId: "123" };
+			await provider.get({
+				token: "test-token",
+				scopes: ["openid", "profile"],
+				state: customState,
+			});
+
+			expect(deleteSpy).toHaveBeenCalledWith({
+				sessionId: provider.generateSessionId("test-token"),
+				state: customState,
+			});
+		});
+
+		it("should pass state to insert callback in get() when refreshing", async () => {
+			const expiredSession = createMockSession(new Date(Date.now() - 1000));
+			const refreshedSession = createMockSession();
+			const insertSpy = vi.fn();
+			const provider = createTestSessionProvider(undefined, {
+				select: async () => expiredSession,
+				insert: insertSpy,
+			});
+
+			vi.spyOn(provider, "refreshAccessToken").mockResolvedValue({
+				data: refreshedSession,
+				error: null,
+			});
+
+			const customState = { userId: "123" };
+			await provider.get({
+				token: "test-token",
+				scopes: ["openid", "profile"],
+				readonlyCookies: false,
+				state: customState,
+			});
+
+			expect(insertSpy).toHaveBeenCalledWith({
+				authTokens: refreshedSession,
+				scopes: ["openid", "profile"],
+				state: customState,
+			});
+		});
+
+		it("should pass state to select callback in getObo()", async () => {
+			const selectSpy = vi.fn(async () => null);
+			const provider = createTestSessionProvider(undefined, {
+				select: selectSpy,
+			});
+
+			vi.spyOn(provider, "acquireTokenOnBehalfOf").mockResolvedValue({
+				data: null,
+				error: null as unknown as Error,
+			});
+
+			const customState = { userId: "123" };
+			await provider.getObo({
+				token: "main-token",
+				scopes: ["openid", "profile"],
+				oboToken: "obo-token",
+				oboScopes: ["https://graph.microsoft.com/.default"],
+				state: customState,
+			});
+
+			expect(selectSpy).toHaveBeenCalledWith(
+				expect.objectContaining({ state: customState }),
+			);
+		});
+
+		it("should pass state to delete callback in delete()", async () => {
+			const deleteSpy = vi.fn();
+			const provider = createTestSessionProvider(undefined, {
+				delete: deleteSpy,
+			});
+
+			const customState = { userId: "123" };
+			await provider.delete({ token: "test-token", state: customState });
+
+			expect(deleteSpy).toHaveBeenCalledWith({
+				sessionId: provider.generateSessionId("test-token"),
+				state: customState,
+			});
 		});
 	});
 });

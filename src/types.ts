@@ -103,7 +103,7 @@ export type GetSessionProps<State> = {
 	token: string;
 	scopes: string[];
 	readonlyCookies?: boolean;
-	state: State;
+	state?: State;
 };
 
 export interface GetOboSessionProps<State> extends GetSessionProps<State> {
@@ -115,39 +115,39 @@ export type RefreshSessionProps<State> = {
 	refreshToken: string;
 	scopes: string[];
 	readonlyCookies?: boolean;
-	state: State;
+	state?: State;
 };
 
 export type SelectSessionProps<State> = {
 	token: string;
 	sessionId: string;
-	state: State;
+	state?: State;
 };
 
 export type InsertSessionProps<State> = {
 	authTokens: AuthProviderResponse;
 	scopes: string[];
-	state: State;
+	state?: State;
 };
 
 export interface SessionProviderCallbacks<State> {
 	select: (
 		props: SelectSessionProps<State>,
 	) => Promise<AuthProviderResponse | null>;
-	delete: (props: { sessionId: string; state: State }) => Promise<void>;
+	delete: (props: { sessionId: string; state?: State }) => Promise<void>;
 	insert: (props: InsertSessionProps<State>) => Promise<void>;
 }
 
 export type DeleteSessionProps<State> =
-	| { token: string; sessionId?: undefined; state: State }
-	| { token?: undefined; sessionId: string; state: State };
+	| { token: string; sessionId?: undefined; state?: State }
+	| { token?: undefined; sessionId: string; state?: State };
 
 export interface SessionProviderProps<State> extends AuthProviderProps {
 	readonly sessionCallbacks: SessionProviderCallbacks<State>;
 }
 
 export interface ISessionProvider<State> extends IAuthProvider {
-	delete: (props: DeleteSessionProps<State>, state: State) => Promise<void>;
+	delete: (props: DeleteSessionProps<State>) => Promise<void>;
 	get: (props: GetSessionProps<State>) => Promise<AuthProviderResponse | null>;
 	getObo: (
 		props: GetOboSessionProps<State>,
