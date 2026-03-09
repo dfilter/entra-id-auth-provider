@@ -9,10 +9,13 @@ import type {
 	SessionProviderProps,
 } from "./types";
 
-export class SessionProvider extends AuthProvider implements ISessionProvider {
-	private readonly sessionCallbacks: SessionProviderCallbacks;
+export class SessionProvider<State>
+	extends AuthProvider
+	implements ISessionProvider<State>
+{
+	private readonly sessionCallbacks: SessionProviderCallbacks<State>;
 
-	constructor({ sessionCallbacks, ...rest }: SessionProviderProps) {
+	constructor({ sessionCallbacks, ...rest }: SessionProviderProps<State>) {
 		super({ ...rest });
 
 		this.sessionCallbacks = sessionCallbacks;
@@ -22,14 +25,15 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 		refreshToken,
 		scopes,
 		readonlyCookies = true,
-	}: RefreshSessionProps) {
+		state,
+	}: RefreshSessionProps<State>) {
 		const { data } = await this.refreshAccessToken({ refreshToken, scopes });
 		if (!data) {
 			return null;
 		}
 
 		if (!readonlyCookies) {
-			await this.sessionCallbacks.insert({ authTokens: data, scopes });
+			await this.sessionCallbacks.insert({ authTokens: data, scopes, state });
 		}
 
 		return data;
@@ -38,24 +42,34 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 	/**
 	 * Delete the session.
 	 */
-	async delete({ token, sessionId }: DeleteSessionProps) {
-		await this.sessionCallbacks.delete(
-			sessionId ?? this.generateSessionId(token),
-		);
+	async delete({ token, sessionId, state }: DeleteSessionProps<State>) {
+		await this.sessionCallbacks.delete({
+			sessionId: sessionId ?? this.generateSessionId(token),
+			state,
+		});
 	}
 
 	/**
 	 * Can be used for any application.
 	 */
-	async get({ token, scopes, readonlyCookies = true }: GetSessionProps) {
+	async get({
+		token,
+		scopes,
+		readonlyCookies = true,
+		state,
+	}: GetSessionProps<State>) {
 		const sessionId = this.generateSessionId(token);
-		const session = await this.sessionCallbacks.select({ sessionId, token });
+		const session = await this.sessionCallbacks.select({
+			sessionId,
+			token,
+			state,
+		});
 		if (!session) {
 			return null;
 		}
 
 		if (Date.now() >= session.oauth2Tokens.accessTokenExpiresAt().getTime()) {
-			await this.delete({ sessionId });
+			await this.delete({ sessionId, state });
 			if (!session.oauth2Tokens.hasRefreshToken()) {
 				return null;
 			}
@@ -63,6 +77,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 				refreshToken: session.oauth2Tokens.refreshToken(),
 				scopes,
 				readonlyCookies,
+				state,
 			});
 		}
 
@@ -78,17 +93,19 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 		oboToken,
 		oboScopes,
 		readonlyCookies = true,
-	}: GetOboSessionProps) {
+		state,
+	}: GetOboSessionProps<State>) {
 		const oboSession = await this.get({
 			token: oboToken,
 			scopes: oboScopes,
 			readonlyCookies,
+			state,
 		});
 		if (oboSession) {
 			return oboSession;
 		}
 
-		const session = await this.get({ scopes, token, readonlyCookies });
+		const session = await this.get({ scopes, token, readonlyCookies, state });
 		if (!session) {
 			return null;
 		}
@@ -98,7 +115,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 			scopes: oboScopes,
 		});
 		if (!data) {
-			await this.delete({ token: oboToken });
+			await this.delete({ token: oboToken, state });
 			return null;
 		}
 
@@ -106,6 +123,7 @@ export class SessionProvider extends AuthProvider implements ISessionProvider {
 			await this.sessionCallbacks.insert({
 				authTokens: data,
 				scopes: oboScopes,
+				state,
 			});
 		}
 
